@@ -4,6 +4,8 @@
 
 This walks the CLI path end to end; every library call has the identical shape (Article II). No step here needs `NVIDIA_API_KEY` unless the evaluator requested is run in live mode.
 
+Steps 3, 5 and 6 pass `--live` to `tna-lab run`, so `NVIDIA_API_KEY` is required for this walkthrough. Without `--live`, `run` uses trust-no-agent's offline cache, which outside a trust-no-agent repo checkout has no evidence to score against — every result comes back `status=error` naming the missing cache, not a score.
+
 ## Prerequisites
 
 ```bash
@@ -49,7 +51,7 @@ tna-lab ingest records.jsonl --dataset smoke
 ## 3. Run an evaluator against the frozen snapshot
 
 ```bash
-tna-lab run smoke@v1 --evaluator tna.ragas.response_relevancy
+tna-lab run smoke@v1 --evaluator tna.ragas.response_relevancy --live
 ```
 
 **Expected**: a run record is written to `.tna-lab/runs/<run_id>.json`, carrying one `EvalResult` per record in `smoke@v1` for `tna.ragas.response_relevancy` — status, score, judge model, fingerprint, token counts, all exactly as trust-no-agent's `evaluate()` returned them (SC-004). The run's own `run_id` is printed.
@@ -57,7 +59,7 @@ tna-lab run smoke@v1 --evaluator tna.ragas.response_relevancy
 Run it again, against a (hypothetically) improved generator:
 
 ```bash
-tna-lab run smoke@v1 --evaluator tna.ragas.response_relevancy
+tna-lab run smoke@v1 --evaluator tna.ragas.response_relevancy --live
 ```
 
 **Expected**: a second, distinct run record with a new `run_id`, scored against the identical `smoke@v1` snapshot.
@@ -81,7 +83,7 @@ tna-lab compare <run_id_1> <run_id_1> --evaluator tna.ragas.response_relevancy
 Run an evaluator id trust-no-agent doesn't recognize:
 
 ```bash
-tna-lab run smoke@v1 --evaluator tna.does.not.exist
+tna-lab run smoke@v1 --evaluator tna.does.not.exist --live
 ```
 
 **Expected**: the run record is still written — every record's result has status `error`, naming the unknown id, exactly as trust-no-agent's own `evaluate()` returns it (SC-005). The command does not crash.
@@ -90,7 +92,7 @@ tna-lab run smoke@v1 --evaluator tna.does.not.exist
 
 ```bash
 tna-lab freeze smoke v2   # a second, distinct snapshot of the same 3-record HEAD
-tna-lab run smoke@v2 --evaluator tna.ragas.response_relevancy
+tna-lab run smoke@v2 --evaluator tna.ragas.response_relevancy --live
 tna-lab compare <run_against_v1> <run_against_v2> --evaluator tna.ragas.response_relevancy
 ```
 

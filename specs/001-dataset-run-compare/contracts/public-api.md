@@ -34,16 +34,25 @@ CLI: `tna-lab freeze <dataset> <tag> [--workspace <path>]`
 ```python
 def run(
     workspace: Path,
-    snapshot: str,                      # "<dataset>@<tag>"
+    snapshot: str | SnapshotRef,        # "<dataset>@<tag>", or an already-resolved ref
     evaluator_ids: Sequence[str],
-    judge: JudgeConfig | None = None,   # defaults to JudgeConfig.from_env()
+    judge: JudgeConfig | None = None,   # defaults to JudgeConfig.from_env() (offline)
     evaluate_fn: EvaluateFn = trustnoagent.evaluators.evaluate,  # test seam only, R6
 ) -> RunRecord:
     """Score a frozen snapshot with one or more evaluators via trust-no-agent (FR-011–FR-018).
 
-    Raises ValueError if `snapshot` does not resolve (FR-009).
+    `snapshot` accepts a `SnapshotRef` as well as its string form, so a caller already
+    holding one from freeze() or resolve() doesn't re-resolve it. Raises ValueError if a
+    string `snapshot` does not resolve (FR-009).
     Never raises for a per-record scoring failure — every EvalResult, whatever its status,
     is persisted (FR-012, FR-017).
+
+    `judge=None`'s default (`JudgeConfig.from_env()`) is offline mode, which needs
+    trust-no-agent's own fixture cache and only works from a repo checkout of
+    trust-no-agent itself — not when it's installed as a package. A caller that wants
+    real scores passes `judge=JudgeConfig.from_env(mode="live")` (what the CLI's `--live`
+    flag does) or a fully explicit JudgeConfig. This is `from_env()`'s own `mode`
+    parameter, not a second config path (Article IV).
     """
 ```
 

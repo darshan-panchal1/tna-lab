@@ -41,6 +41,16 @@ def write_json(path: Path, data: dict[str, Any]) -> None:
     path.write_text(encoded)
 
 
+def overwrite_json(path: Path, data: dict[str, Any]) -> None:
+    """Write `data` as JSON at `path`, always replacing any existing content.
+
+    For genuinely mutable state only (a dataset's HEAD) — content-addressed artifacts
+    (records, snapshots, runs) use `write_json`'s append-only semantics instead.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(canonical_json(data))
+
+
 def read_json(path: Path) -> dict[str, Any]:
     """Read and decode the JSON object at `path`."""
     data: dict[str, Any] = json.loads(path.read_text())

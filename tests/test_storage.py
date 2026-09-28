@@ -51,6 +51,19 @@ def test_write_json_is_noop_on_identical_content(tmp_path: Path) -> None:
     assert mtime_before <= path.stat().st_mtime_ns
 
 
+def test_overwrite_json_always_replaces_content(tmp_path: Path) -> None:
+    path = tmp_path / "head.json"
+    storage.overwrite_json(path, {"record_ids": ["a"]})
+    storage.overwrite_json(path, {"record_ids": ["a", "b"]})  # must not raise
+    assert storage.read_json(path) == {"record_ids": ["a", "b"]}
+
+
+def test_overwrite_json_creates_parent_directories(tmp_path: Path) -> None:
+    path = tmp_path / "nested" / "dir" / "head.json"
+    storage.overwrite_json(path, {"record_ids": []})
+    assert storage.read_json(path) == {"record_ids": []}
+
+
 def test_write_json_refuses_to_overwrite_different_content(tmp_path: Path) -> None:
     path = tmp_path / "record.json"
     storage.write_json(path, {"input": "hi"})

@@ -36,10 +36,10 @@ class FakeEvaluate:
     """Records every call; returns `ok`/0.5 unless `statuses` maps a record input to a status."""
 
     statuses: dict[str, str] = field(default_factory=dict)
-    calls: list[tuple[str, Any, Any]] = field(default_factory=list)
+    calls: list[tuple[str, Any, Any, Path]] = field(default_factory=list)
 
-    def __call__(self, evaluator_id: str, record: Any, judge: Any) -> Any:
-        self.calls.append((evaluator_id, record, judge))
+    def __call__(self, evaluator_id: str, record: Any, judge: Any, cache_dir: Path) -> Any:
+        self.calls.append((evaluator_id, record, judge, cache_dir))
         status = self.statuses.get(record.input, "ok")
         if status == "ok":
             return FakeResult(evaluator_id, "ok", score=0.5)
@@ -141,6 +141,38 @@ def test_run_without_a_judge_passes_a_judge_config_from_the_environment(tmp_path
     assert judge is not None
     assert (judge.judge_model, judge.generator_model) == ("test-judge", "test-generator")
     assert (result.judge_model, result.generator_model) == ("test-judge", "test-generator")
+
+
+def test_run_creates_the_workspace_cache_and_passes_it_to_every_call(tmp_path: Path) -> None:
+    snapshot = _frozen(tmp_path, 3)
+    assert not (tmp_path / "cache").exists()
+
+    fake = FakeEvaluate()
+    run(tmp_path, snapshot, ["tna.fake.one", "tna.fake.two"], evaluate_fn=fake)
+
+    assert (tmp_path / "cache").is_dir()
+    assert len(fake.calls) == 6
+    assert {call[3] for call in fake.calls} == {tmp_path / "cache"}
+
+
+def test_every_run_in_a_workspace_shares_one_cache(tmp_path: Path) -> None:
+    snapshot = _frozen(tmp_path, 2)
+    first, second = FakeEvaluate(), FakeEvaluate()
+    run(tmp_path, snapshot, ["tna.fake.one"], evaluate_fn=first)
+    run(tmp_path, snapshot, ["tna.fake.one"], evaluate_fn=second)
+    assert {call[3] for call in first.calls + second.calls} == {tmp_path / "cache"}
+
+
+def test_an_explicit_cache_dir_is_created_and_used_instead(tmp_path: Path) -> None:
+    snapshot = _frozen(tmp_path, 2)
+    elsewhere = tmp_path / "shared" / "evidence"
+
+    fake = FakeEvaluate()
+    run(tmp_path, snapshot, ["tna.fake.one"], cache_dir=elsewhere, evaluate_fn=fake)
+
+    assert elsewhere.is_dir()
+    assert {call[3] for call in fake.calls} == {elsewhere}
+    assert not (tmp_path / "cache").exists()
 
 
 def test_run_against_a_missing_snapshot_raises_naming_the_tag(tmp_path: Path) -> None:

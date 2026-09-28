@@ -49,12 +49,12 @@ def _parser() -> argparse.ArgumentParser:
         "--live",
         action="store_true",
         help=(
-            "call the real judge/generator models instead of trust-no-agent's offline "
-            "mode (which needs a repo-checkout fixture cache and produces no scores "
-            "when installed as a package). Reads NVIDIA_API_KEY, same as trust-no-agent "
-            "itself; JUDGE_MODEL/GENERATOR_MODEL are read either way (Article IV: this "
-            "flag only selects JudgeConfig.from_env()'s own `mode`, never a second "
-            "config path)."
+            "call the real judge/generator models on a cache miss and save the result "
+            "to <workspace>/cache, so a repeat is served from disk. Without it, run "
+            "replays only what that cache already holds; anything else is a cache-miss "
+            "error. Reads NVIDIA_API_KEY, same as trust-no-agent itself; "
+            "JUDGE_MODEL/GENERATOR_MODEL are read either way (Article IV: this flag only "
+            "selects JudgeConfig.from_env()'s own `mode`, never a second config path)."
         ),
     )
 

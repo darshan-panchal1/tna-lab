@@ -44,7 +44,7 @@ class FakeEvaluate:
     score: float = 0.5
     overrides: dict[str, float] = field(default_factory=dict)
 
-    def __call__(self, evaluator_id: str, record: Any, judge: Any) -> Any:
+    def __call__(self, evaluator_id: str, record: Any, judge: Any, cache_dir: Path) -> Any:
         return FakeResult(evaluator_id, "ok", self.overrides.get(record.input, self.score))
 
 
@@ -184,7 +184,7 @@ def test_run_without_live_uses_offline_mode(
     _prepared(capsys, tmp_path, records_file)
     seen_modes: list[str] = []
 
-    def spy(evaluator_id: str, record: Any, judge: Any) -> FakeResult:
+    def spy(evaluator_id: str, record: Any, judge: Any, cache_dir: Path) -> FakeResult:
         seen_modes.append(judge.mode)
         return FakeResult(evaluator_id, "ok", 0.5)
 
@@ -202,7 +202,7 @@ def test_run_with_live_flag_requests_live_mode(
     _prepared(capsys, tmp_path, records_file)
     seen_modes: list[str] = []
 
-    def spy(evaluator_id: str, record: Any, judge: Any) -> FakeResult:
+    def spy(evaluator_id: str, record: Any, judge: Any, cache_dir: Path) -> FakeResult:
         seen_modes.append(judge.mode)
         return FakeResult(evaluator_id, "ok", 0.5)
 

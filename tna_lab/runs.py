@@ -4,6 +4,11 @@ unmodified (Story 3, spec FR-011-FR-018, research R3, R5, R6).
 The only module in tna_lab that imports trustnoagent. It never computes, retries or
 reinterprets a score, and never catches what evaluate() raises — trust-no-agent already
 turns every evaluation-time failure into a status (research R5).
+
+The one thing it does resolve is where trust-no-agent keeps its judge-call evidence:
+evaluate() needs a cache directory in both offline and live mode, and finds none by itself
+outside its own repo checkout. run() supplies `<workspace>/cache` (created if missing), so
+a repeated live call is served from disk rather than billed again (research R6).
 """
 
 from __future__ import annotations
@@ -24,8 +29,9 @@ from tna_lab.snapshots import SnapshotRef, resolve
 from tna_lab.storage import canonical_json, read_json, write_json
 
 # Which function scores one record — a test seam only, never a model or provider choice
-# (research R6). The shipped default is always trust-no-agent's own evaluate().
-EvaluateFn = Callable[[str, EvalRecord, JudgeConfig], EvalResult]
+# (research R6). The shipped default is always trust-no-agent's own evaluate(), whose
+# signature this matches: (evaluator_id, record, judge, cache_dir).
+EvaluateFn = Callable[[str, EvalRecord, JudgeConfig, Path], EvalResult]
 
 
 @dataclass(frozen=True)
@@ -39,6 +45,11 @@ class RunRecord:
     created_at: str
     # {evaluator_id: {record_id: trust-no-agent's EvalResult as a plain dict, unmodified}}
     results: Mapping[str, Mapping[str, dict[str, Any]]]
+
+
+def cache_path(workspace: Path) -> Path:
+    """The workspace's judge-call evidence store: stable, so every run in it shares hits."""
+    return workspace / "cache"
 
 
 def _run_path(workspace: Path, run_id: str) -> Path:
@@ -62,10 +73,14 @@ def run(
     snapshot: str | SnapshotRef,
     evaluator_ids: Sequence[str],
     judge: JudgeConfig | None = None,
+    cache_dir: Path | None = None,
     evaluate_fn: EvaluateFn = evaluate,
 ) -> RunRecord:
     """Score every record in `snapshot` (`<dataset>@<tag>`, or an already-resolved
     SnapshotRef) with every evaluator id, once per (record, evaluator) pair (FR-012).
+
+    `cache_dir` is where trust-no-agent reads and writes judge-call evidence; it
+    defaults to `<workspace>/cache`, created if missing, and is passed to every call.
 
     Raises ValueError if `snapshot` does not resolve (FR-009). Never raises for a
     per-record scoring failure: every result, whatever its status, is persisted (FR-017).
@@ -73,6 +88,8 @@ def run(
     ref = resolve(workspace, snapshot) if isinstance(snapshot, str) else snapshot
     config = judge if judge is not None else JudgeConfig.from_env()  # FR-013: as-is
     ids = tuple(dict.fromkeys(evaluator_ids))  # a repeated id is still scored only once
+    evidence = cache_dir if cache_dir is not None else cache_path(workspace)
+    evidence.mkdir(parents=True, exist_ok=True)
 
     now = datetime.now(UTC)
     run_id = f"{now.strftime('%Y%m%dT%H%M%SZ')}-{secrets.token_hex(4)}"
@@ -80,7 +97,7 @@ def run(
     records = {rid: _eval_record(workspace, ref.dataset, rid) for rid in ref.record_ids}
     results = {
         evaluator_id: {
-            rid: asdict(evaluate_fn(evaluator_id, record, config))
+            rid: asdict(evaluate_fn(evaluator_id, record, config, evidence))
             for rid, record in records.items()
         }
         for evaluator_id in ids

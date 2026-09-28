@@ -2,9 +2,13 @@
 
 Everything else uses a fake evaluate_fn (research R6). This proves the *default* wiring:
 run() with no evaluate_fn hands a real EvalRecord and JudgeConfig to trust-no-agent and
-persists what comes back. No live credential is needed — an installed trust-no-agent with
-no reachable evidence cache answers with its own `error` result, never an exception
-(trust-no-agent FR-004), so the assertions are on that result's shape, not a score.
+persists what comes back. No live credential is needed: offline mode over the workspace's
+fresh, empty evidence cache answers with trust-no-agent's own cache-miss `error`, never an
+exception (trust-no-agent FR-004), so the assertions are on that result's shape, not a score.
+
+That error must be a cache *miss*. trust-no-agent resolves no cache directory by itself
+outside its own repo checkout, and before run() supplied `<workspace>/cache` every call —
+offline or live — ended at "no cache_dir given", so no run could ever produce a score.
 """
 
 from __future__ import annotations
@@ -58,10 +62,20 @@ def test_default_evaluate_fn_returns_a_well_formed_result(tmp_path: Path, snapsh
     assert persisted["status"] in _STATUSES
     if persisted["status"] == "ok":
         assert persisted["score"] is not None or persisted["label"] is not None
-    else:  # no committed evidence reachable from an installed wheel: a named error, no verdict
+    else:  # an empty workspace cache, offline: a named cache miss, no verdict
         assert persisted["score"] is None and persisted["label"] is None
-        assert persisted["error"]
+        assert "cache miss" in persisted["error"]
     assert load_run(tmp_path, result.run_id) == result
+
+
+def test_default_wiring_resolves_a_cache_dir_outside_a_trust_no_agent_checkout(
+    tmp_path: Path, snapshot: str
+) -> None:
+    result = run(tmp_path, snapshot, ["tna.ragas.response_relevancy"])
+
+    (persisted,) = result.results["tna.ragas.response_relevancy"].values()
+    assert "no cache_dir given" not in (persisted["error"] or "")
+    assert (tmp_path / "cache").is_dir()
 
 
 def test_unknown_evaluator_is_persisted_as_trust_no_agents_own_error(

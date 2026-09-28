@@ -8,3 +8,4 @@ dist/
 *.egg-info/
 .tna-lab/
 uv.lock.tmp
+.env

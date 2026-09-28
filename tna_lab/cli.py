@@ -15,6 +15,8 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+from trustnoagent import JudgeConfig
+
 from tna_lab.compare import Comparison, compare
 from tna_lab.datasets import ingest, load_jsonl
 from tna_lab.runs import EvaluateFn, load_run, run
@@ -43,6 +45,18 @@ def _parser() -> argparse.ArgumentParser:
     p = commands.add_parser("run", parents=[common], help="score a snapshot via trust-no-agent")
     p.add_argument("snapshot", metavar="<dataset>@<tag>")
     p.add_argument("--evaluator", action="append", required=True, dest="evaluators")
+    p.add_argument(
+        "--live",
+        action="store_true",
+        help=(
+            "call the real judge/generator models instead of trust-no-agent's offline "
+            "mode (which needs a repo-checkout fixture cache and produces no scores "
+            "when installed as a package). Reads NVIDIA_API_KEY, same as trust-no-agent "
+            "itself; JUDGE_MODEL/GENERATOR_MODEL are read either way (Article IV: this "
+            "flag only selects JudgeConfig.from_env()'s own `mode`, never a second "
+            "config path)."
+        ),
+    )
 
     p = commands.add_parser("compare", parents=[common], help="diff two runs for one evaluator")
     p.add_argument("run_a")
@@ -99,11 +113,11 @@ def _dispatch(args: argparse.Namespace, evaluate_fn: EvaluateFn | None) -> tuple
         text = f"{ref.dataset}@{ref.tag} snapshot_id={ref.snapshot_id} records={len(ref.record_ids)}"
         return ref, text
     if args.command == "run":
-        record = (
-            run(workspace, args.snapshot, args.evaluators)
-            if evaluate_fn is None
-            else run(workspace, args.snapshot, args.evaluators, evaluate_fn=evaluate_fn)
-        )
+        judge = JudgeConfig.from_env(mode="live") if args.live else None
+        kwargs: dict[str, Any] = {"judge": judge}
+        if evaluate_fn is not None:
+            kwargs["evaluate_fn"] = evaluate_fn
+        record = run(workspace, args.snapshot, args.evaluators, **kwargs)
         return record, record.run_id
     result = compare(load_run(workspace, args.run_a), load_run(workspace, args.run_b), args.evaluator)
     return result, _comparison_table(result)

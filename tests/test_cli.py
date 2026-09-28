@@ -178,6 +178,42 @@ def test_run_json_is_the_persisted_run_record(
     assert printed == _plain(load_run(tmp_path, printed["run_id"]))
 
 
+def test_run_without_live_uses_offline_mode(
+    tmp_path: Path, records_file: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _prepared(capsys, tmp_path, records_file)
+    seen_modes: list[str] = []
+
+    def spy(evaluator_id: str, record: Any, judge: Any) -> FakeResult:
+        seen_modes.append(judge.mode)
+        return FakeResult(evaluator_id, "ok", 0.5)
+
+    code, _, _ = _cli(
+        capsys, "run", "smoke@v1", "--evaluator", EVALUATOR, "--workspace", tmp_path,
+        evaluate_fn=spy,
+    )
+    assert code == 0
+    assert seen_modes == ["offline"] * len(RECORDS)
+
+
+def test_run_with_live_flag_requests_live_mode(
+    tmp_path: Path, records_file: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _prepared(capsys, tmp_path, records_file)
+    seen_modes: list[str] = []
+
+    def spy(evaluator_id: str, record: Any, judge: Any) -> FakeResult:
+        seen_modes.append(judge.mode)
+        return FakeResult(evaluator_id, "ok", 0.5)
+
+    code, _, _ = _cli(
+        capsys, "run", "smoke@v1", "--evaluator", EVALUATOR, "--live", "--workspace", tmp_path,
+        evaluate_fn=spy,
+    )
+    assert code == 0
+    assert seen_modes == ["live"] * len(RECORDS)
+
+
 def test_run_against_an_unknown_tag_fails_naming_it(
     tmp_path: Path, records_file: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

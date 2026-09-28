@@ -60,7 +60,9 @@ On disk at `datasets/<dataset>/snapshots/<tag>.json`. Immutable once written (FR
 
 On disk at `runs/<run_id>.json`, written once, atomically, when the run completes.
 
-**`run(workspace, snapshot: SnapshotRef, evaluator_ids: Sequence[str], judge: JudgeConfig | None = None, evaluate_fn: EvaluateFn = trustnoagent.evaluators.evaluate) -> RunRecord`** (R5, R6): for every `(record_id, evaluator_id)` pair, loads the record, calls `evaluate_fn(evaluator_id, record, judge)`, and stores the returned `EvalResult` unmodified. `judge` defaults to `JudgeConfig.from_env()` if not given (FR-013).
+**`run(workspace, snapshot: str | SnapshotRef, evaluator_ids: Sequence[str], judge: JudgeConfig | None = None, cache_dir: Path | None = None, evaluate_fn: EvaluateFn = trustnoagent.evaluators.evaluate) -> RunRecord`** (R5, R6): for every `(record_id, evaluator_id)` pair, loads the record, calls `evaluate_fn(evaluator_id, record, judge, cache_dir)`, and stores the returned `EvalResult` unmodified. `judge` defaults to `JudgeConfig.from_env()` if not given (FR-013). `cache_dir` defaults to `<workspace>/cache`, created if missing: trust-no-agent's judge-call evidence store, shared by every run in the workspace (R6).
+
+**`EvaluateFn`**: `Callable[[str, EvalRecord, JudgeConfig, Path], EvalResult]`, the shape of trust-no-agent's own `evaluate(evaluator, record, judge, cache_dir)`. A test seam only (R6).
 
 **`load_run(workspace, run_id) -> RunRecord`**: reads a persisted run record back.
 

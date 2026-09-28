@@ -37,6 +37,7 @@ def run(
     snapshot: str | SnapshotRef,        # "<dataset>@<tag>", or an already-resolved ref
     evaluator_ids: Sequence[str],
     judge: JudgeConfig | None = None,   # defaults to JudgeConfig.from_env() (offline)
+    cache_dir: Path | None = None,      # defaults to <workspace>/cache, created if missing
     evaluate_fn: EvaluateFn = trustnoagent.evaluators.evaluate,  # test seam only, R6
 ) -> RunRecord:
     """Score a frozen snapshot with one or more evaluators via trust-no-agent (FR-011–FR-018).
@@ -47,16 +48,25 @@ def run(
     Never raises for a per-record scoring failure — every EvalResult, whatever its status,
     is persisted (FR-012, FR-017).
 
-    `judge=None`'s default (`JudgeConfig.from_env()`) is offline mode, which needs
-    trust-no-agent's own fixture cache and only works from a repo checkout of
-    trust-no-agent itself — not when it's installed as a package. A caller that wants
-    real scores passes `judge=JudgeConfig.from_env(mode="live")` (what the CLI's `--live`
-    flag does) or a fully explicit JudgeConfig. This is `from_env()`'s own `mode`
-    parameter, not a second config path (Article IV).
+    `cache_dir` is where trust-no-agent reads and writes judge-call evidence, passed to
+    every evaluate() call. trust-no-agent needs one in both modes and resolves none by
+    itself outside its own repo checkout, so run() defaults it to `<workspace>/cache`.
+
+    `judge=None`'s default (`JudgeConfig.from_env()`) is offline mode: it replays only
+    evidence already in `cache_dir`, and anything else is a cache-miss `error` result.
+    A caller that wants new scores passes `judge=JudgeConfig.from_env(mode="live")` (what
+    the CLI's `--live` flag does) or a fully explicit JudgeConfig; live mode calls the
+    judge on a miss and writes the result to `cache_dir`, so a repeat is not billed
+    again. This is `from_env()`'s own `mode` parameter, not a second config path
+    (Article IV).
     """
 ```
 
-CLI: `tna-lab run <dataset>@<tag> --evaluator <id> [--evaluator <id> ...] [--workspace <path>]`
+CLI: `tna-lab run <dataset>@<tag> --evaluator <id> [--evaluator <id> ...] [--live] [--workspace <path>]`
+
+The CLI has no `--cache-dir` flag: it always uses `<workspace>/cache`, and `--workspace` moves it.
+
+`EvaluateFn` is `Callable[[str, EvalRecord, JudgeConfig, Path], EvalResult]`: `(evaluator_id, record, judge, cache_dir)`, the shape of trust-no-agent's own `evaluate()`.
 
 ## `tna_lab.load_run`
 

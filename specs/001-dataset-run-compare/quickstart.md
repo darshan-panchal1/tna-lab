@@ -4,7 +4,7 @@
 
 This walks the CLI path end to end; every library call has the identical shape (Article II). No step here needs `NVIDIA_API_KEY` unless the evaluator requested is run in live mode.
 
-Steps 3, 5 and 6 pass `--live` to `tna-lab run`, so `NVIDIA_API_KEY` is required for this walkthrough. Without `--live`, `run` uses trust-no-agent's offline cache, which outside a trust-no-agent repo checkout has no evidence to score against — every result comes back `status=error` naming the missing cache, not a score.
+Steps 3, 5 and 6 pass `--live` to `tna-lab run`, so `NVIDIA_API_KEY` is required for this walkthrough. `run` keeps trust-no-agent's judge-call evidence in `.tna-lab/cache/`: `--live` calls the judge on a cache miss and saves the result there, so repeating a call is not billed again. Without `--live`, `run` only replays what that cache already holds; any record it doesn't hold comes back `status=error` naming a cache miss, not a score.
 
 ## Prerequisites
 

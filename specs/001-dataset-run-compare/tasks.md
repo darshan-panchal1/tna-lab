@@ -32,10 +32,10 @@ Expected: green, `mypy --strict` clean. There is no prior baseline — Phase 1 s
 
 **Purpose**: a package that imports and an empty CI gate to grow into.
 
-- [ ] T001 Create `pyproject.toml`: project name `tna-lab`, `requires-python = "==3.12.*"`, dependency `trust-no-agent` pinned exactly to the version this session's `trust-no-agent` checkout reports (`1.1.0` as of 2026-09-28), dev dependencies `pytest`, `ruff`, `mypy`. Console script `tna-lab = "tna_lab.cli:main"`.
-- [ ] T002 [P] Create `.python-version` (`3.12`) and `.gitignore` entries for `__pycache__/`, `.venv/`, `.mypy_cache/`, `.ruff_cache/`, `.pytest_cache/`, `.tna-lab/` (a workspace directory created by running the tool should never be committed from a working checkout that isn't itself a test fixture).
-- [ ] T003 [P] Create `tna_lab/__init__.py` with `__version__ = "0.1.0"` and no other content yet — the public exports land as each story's module does (T0xx below updates it additively).
-- [ ] T004 Run `uv sync`. Confirm `uv run python -c "import tna_lab"` succeeds. Run GATE — expected: no tests collected yet, `ruff`/`mypy` clean on the one-line package.
+- [X] T001 Create `pyproject.toml`: project name `tna-lab`, `requires-python = "==3.12.*"`, dependency `trust-no-agent` pinned exactly to the version this session's `trust-no-agent` checkout reports (`1.1.0` as of 2026-09-28), dev dependencies `pytest`, `ruff`, `mypy`. Console script `tna-lab = "tna_lab.cli:main"`.
+- [X] T002 [P] Create `.python-version` (`3.12`) and `.gitignore` entries for `__pycache__/`, `.venv/`, `.mypy_cache/`, `.ruff_cache/`, `.pytest_cache/`, `.tna-lab/` (a workspace directory created by running the tool should never be committed from a working checkout that isn't itself a test fixture).
+- [X] T003 [P] Create `tna_lab/__init__.py` with `__version__ = "0.1.0"` and no other content yet — the public exports land as each story's module does (T0xx below updates it additively).
+- [X] T004 Run `uv sync`. Confirm `uv run python -c "import tna_lab"` succeeds. Run GATE — expected: no tests collected yet, `ruff`/`mypy` clean on the one-line package.
 
 **Checkpoint**: the package installs and imports. Nothing else works yet.
 
@@ -47,12 +47,12 @@ Expected: green, `mypy --strict` clean. There is no prior baseline — Phase 1 s
 
 ### Tests first
 
-- [ ] T005 [P] Write `tests/test_records.py` for `tna_lab/records.py`:
+- [X] T005 [P] Write `tests/test_records.py` for `tna_lab/records.py`:
   - two `DatasetRecord`s with identical field values (including `contexts` as a tuple built two different ways, e.g. from a list vs. a generator) produce the same `record_id`;
   - changing any one field (including `metadata`) changes the id;
   - `contexts=None` and `contexts=()` produce different ids — presence-vs-absence matters, an empty tuple is not the same as no contexts (mirrors trust-no-agent's own "empty is present" rule for `EvalRecord`);
   - `record_id` is a 64-character lowercase hex string (full sha256).
-- [ ] T006 [P] Write `tests/test_storage.py` for `tna_lab/storage.py`:
+- [X] T006 [P] Write `tests/test_storage.py` for `tna_lab/storage.py`:
   - `canonical_json` is independent of dict key order and produces the same bytes for equal structures;
   - `workspace_root(explicit=None)` defaults to `Path.cwd() / ".tna-lab"`; `workspace_root(explicit=some_path)` returns `some_path` unchanged;
   - `write_json`/`read_json` round-trip a dataclass-shaped dict exactly;
@@ -60,9 +60,9 @@ Expected: green, `mypy --strict` clean. There is no prior baseline — Phase 1 s
 
 ### Implementation
 
-- [ ] T007 [P] Create `tna_lab/records.py`: frozen `@dataclass DatasetRecord(input, output, expected, contexts, metadata)` and `record_id(record) -> str` per data-model.md.
-- [ ] T008 [P] Create `tna_lab/storage.py`: `canonical_json(obj) -> str`, `workspace_root(explicit: Path | None) -> Path`, `write_json(path, data)`, `read_json(path) -> dict`, each per T006's tests.
-- [ ] T009 GATE. T005 and T006 must now be green.
+- [X] T007 [P] Create `tna_lab/records.py`: frozen `@dataclass DatasetRecord(input, output, expected, contexts, metadata)` and `record_id(record) -> str` per data-model.md.
+- [X] T008 [P] Create `tna_lab/storage.py`: `canonical_json(obj) -> str`, `workspace_root(explicit: Path | None) -> Path`, `write_json(path, data)`, `read_json(path) -> dict`, each per T006's tests.
+- [X] T009 GATE. T005 and T006 must now be green.
 
 **Checkpoint**: identity and storage are solid. Every story below builds on these two modules only.
 
@@ -74,7 +74,7 @@ Expected: green, `mypy --strict` clean. There is no prior baseline — Phase 1 s
 
 ### Tests first
 
-- [ ] T010 [P] [US1] Write `tests/test_datasets.py` for `tna_lab/datasets.py`:
+- [X] T010 [P] [US1] Write `tests/test_datasets.py` for `tna_lab/datasets.py`:
   - ingesting 5 records into a fresh dataset creates 5 record files and a `head.json` listing all 5 ids;
   - re-ingesting the identical 5 records reports `added=0, already_present=5`, and the dataset's record count is still 5 (SC-002);
   - ingesting a record missing `contexts` (present as `None`) succeeds — no field beyond the record's own identity is required (spec Edge Cases, FR-002/FR-003);
@@ -82,9 +82,9 @@ Expected: green, `mypy --strict` clean. There is no prior baseline — Phase 1 s
 
 ### Implementation
 
-- [ ] T011 [US1] Create `tna_lab/datasets.py`: `@dataclass IngestResult(added: int, already_present: int)` and `ingest(workspace, dataset, records) -> IngestResult`, using `records.py` and `storage.py` only.
-- [ ] T012 [US1] Add `ingest` to `tna_lab/__init__.py`'s exports.
-- [ ] T013 GATE. T010 must now be green.
+- [X] T011 [US1] Create `tna_lab/datasets.py`: `@dataclass IngestResult(added: int, already_present: int)` and `ingest(workspace, dataset, records) -> IngestResult`, using `records.py` and `storage.py` only.
+- [X] T012 [US1] Add `ingest` to `tna_lab/__init__.py`'s exports.
+- [X] T013 GATE. T010 must now be green.
 
 **Checkpoint**: a developer can build a dataset. Nothing can be scored yet — that needs Stories 2 and 3.
 
@@ -96,7 +96,7 @@ Expected: green, `mypy --strict` clean. There is no prior baseline — Phase 1 s
 
 ### Tests first
 
-- [ ] T014 [P] [US2] Write `tests/test_snapshots.py` for `tna_lab/snapshots.py`:
+- [X] T014 [P] [US2] Write `tests/test_snapshots.py` for `tna_lab/snapshots.py`:
   - freezing a 5-record dataset as `v1` produces a `SnapshotRef` with 5 `record_ids`, a `snapshot_id`, and a `frozen_at` timestamp;
   - ingesting more records afterward does not change what `resolve(workspace, "smoke@v1")` returns — re-reading it is byte-identical to the freeze-time content (SC-003);
   - freezing the same dataset twice under two different tags (`v1`, `v2`) produces two independently resolvable snapshots with different `snapshot_id`s, even when the record set is identical between the two freezes (research R2);
@@ -105,9 +105,9 @@ Expected: green, `mypy --strict` clean. There is no prior baseline — Phase 1 s
 
 ### Implementation
 
-- [ ] T015 [US2] Create `tna_lab/snapshots.py`: frozen `@dataclass SnapshotRef(dataset, tag, snapshot_id, frozen_at, record_ids)`, `freeze(workspace, dataset, tag) -> SnapshotRef`, `resolve(workspace, ref: str) -> SnapshotRef` per data-model.md and research R2.
-- [ ] T016 [US2] Add `freeze` to `tna_lab/__init__.py`'s exports.
-- [ ] T017 GATE. T014 must now be green.
+- [X] T015 [US2] Create `tna_lab/snapshots.py`: frozen `@dataclass SnapshotRef(dataset, tag, snapshot_id, frozen_at, record_ids)`, `freeze(workspace, dataset, tag) -> SnapshotRef`, `resolve(workspace, ref: str) -> SnapshotRef` per data-model.md and research R2.
+- [X] T016 [US2] Add `freeze` to `tna_lab/__init__.py`'s exports.
+- [X] T017 GATE. T014 must now be green.
 
 **Checkpoint**: a developer can produce something reproducible to run against. Story 3 needs this.
 
@@ -119,20 +119,20 @@ Expected: green, `mypy --strict` clean. There is no prior baseline — Phase 1 s
 
 ### Tests first
 
-- [ ] T018 [P] [US3] Write `tests/test_runs.py` for `tna_lab/runs.py`, using a fake `evaluate_fn` (research R6) — **no import of `trustnoagent` in this file**:
+- [X] T018 [P] [US3] Write `tests/test_runs.py` for `tna_lab/runs.py`, using a fake `evaluate_fn` (research R6) — **no import of `trustnoagent` in this file**:
   - a fake `evaluate_fn` that always returns a fixed `ok` result is called once per `(record, evaluator)` pair for a 3-record snapshot and 1 evaluator id — 3 calls total, and the run record's `results["<id>"]` has 3 entries keyed by record id;
   - a run against 2 evaluator ids produces a run record whose `results` has 2 top-level keys, each with all snapshot records (FR-016);
   - a fake `evaluate_fn` that returns `error`, `skipped`, and `invalid_output` results (one each, for three different records) — the run record persists all three, unmodified, and the run does not raise (FR-012, FR-017 — this is the load-bearing test for research R5's "never re-implement failure handling" decision);
   - the run record's `snapshot_id` matches the snapshot's exact identity, not just its `<dataset>@<tag>` name (FR-015);
   - `run()` called with no `judge` argument builds one via the injected `evaluate_fn`'s own default path — assert the fake receives *a* `JudgeConfig`-shaped object, not that any particular model is chosen (this feature doesn't choose one — Article IV);
   - `load_run(workspace, run_id)` returns a `RunRecord` equal to what `run()` returned.
-- [ ] T019 [P] [US3] Write `tests/test_runs_integration.py`, marked to skip unless `trust-no-agent`'s own offline evidence is reachable (mirrors trust-no-agent's own live-vs-offline separation, Article III of *its* constitution) — this is the one place this feature's tests touch the real `trustnoagent.evaluators.evaluate`, to prove the default wiring (not the fake) actually works end to end. If no committed evidence resolves for the chosen record/evaluator pair, the test should assert on the *shape* of the `error` result (a cache-miss `error`, not an exception) rather than a specific score, so it does not require live credentials to pass.
+- [X] T019 [P] [US3] Write `tests/test_runs_integration.py`, marked to skip unless `trust-no-agent`'s own offline evidence is reachable (mirrors trust-no-agent's own live-vs-offline separation, Article III of *its* constitution) — this is the one place this feature's tests touch the real `trustnoagent.evaluators.evaluate`, to prove the default wiring (not the fake) actually works end to end. If no committed evidence resolves for the chosen record/evaluator pair, the test should assert on the *shape* of the `error` result (a cache-miss `error`, not an exception) rather than a specific score, so it does not require live credentials to pass.
 
 ### Implementation
 
-- [ ] T020 [US3] Create `tna_lab/runs.py`: `EvaluateFn` type alias, frozen `@dataclass RunRecord(run_id, snapshot_id, snapshot_ref, evaluator_ids, judge_model, generator_model, created_at, results)`, `run(workspace, snapshot, evaluator_ids, judge=None, evaluate_fn=trustnoagent.evaluators.evaluate) -> RunRecord`, `load_run(workspace, run_id) -> RunRecord`. This is the one file in the package that imports `trustnoagent` (as the default value only — T018's tests never trigger that default).
-- [ ] T021 [US3] Add `run` and `load_run` to `tna_lab/__init__.py`'s exports.
-- [ ] T022 GATE. T018 must now be green; T019 passes or skips per its own guard, never errors.
+- [X] T020 [US3] Create `tna_lab/runs.py`: `EvaluateFn` type alias, frozen `@dataclass RunRecord(run_id, snapshot_id, snapshot_ref, evaluator_ids, judge_model, generator_model, created_at, results)`, `run(workspace, snapshot, evaluator_ids, judge=None, evaluate_fn=trustnoagent.evaluators.evaluate) -> RunRecord`, `load_run(workspace, run_id) -> RunRecord`. This is the one file in the package that imports `trustnoagent` (as the default value only — T018's tests never trigger that default).
+- [X] T021 [US3] Add `run` and `load_run` to `tna_lab/__init__.py`'s exports.
+- [X] T022 GATE. T018 must now be green; T019 passes or skips per its own guard, never errors.
 
 **Checkpoint**: a developer can produce two runs to compare. Story 4 needs this.
 
@@ -144,7 +144,7 @@ Expected: green, `mypy --strict` clean. There is no prior baseline — Phase 1 s
 
 ### Tests first
 
-- [ ] T023 [P] [US4] Write `tests/test_compare.py` for `tna_lab/compare.py`, building `RunRecord` fixtures directly (no `evaluate_fn`, no `trustnoagent` import needed):
+- [X] T023 [P] [US4] Write `tests/test_compare.py` for `tna_lab/compare.py`, building `RunRecord` fixtures directly (no `evaluate_fn`, no `trustnoagent` import needed):
   - two runs against the same snapshot, same evaluator, scores `[0.5, 0.8, 0.5]` vs. `[0.7, 0.8, 0.3]` → record 1 `improved` (delta `+0.2`), record 2 `unchanged` (delta `0.0`), record 3 `regressed` (delta `-0.2`); summary counts `1/1/1` and a correct `mean_score_delta` (research R7);
   - the same shape for a `labels`-based evaluator with an ordered pass/fail set: `["pass","fail","pass"]` vs. `["pass","pass","pass"]` → record 2 `improved` (`"fail" → "pass"`), others `unchanged`; summary's `pass_rate_delta` set, `mean_score_delta` is `None`;
   - a record whose status differs between the two runs (`ok` in one, `invalid_output` in the other) reports `status_changed=True` regardless of what the score/label fields say (FR-023);
@@ -154,9 +154,9 @@ Expected: green, `mypy --strict` clean. There is no prior baseline — Phase 1 s
 
 ### Implementation
 
-- [ ] T024 [US4] Create `tna_lab/compare.py`: frozen `@dataclass`es `RecordDelta`, `ComparisonSummary`, `Comparison`, and `compare(run_a, run_b, evaluator_id) -> Comparison` per data-model.md and research R7. No import of `trustnoagent` — everything it needs is already plain data on the two `RunRecord`s.
-- [ ] T025 [US4] Add `compare` to `tna_lab/__init__.py`'s exports.
-- [ ] T026 GATE. T023 must now be green.
+- [X] T024 [US4] Create `tna_lab/compare.py`: frozen `@dataclass`es `RecordDelta`, `ComparisonSummary`, `Comparison`, and `compare(run_a, run_b, evaluator_id) -> Comparison` per data-model.md and research R7. No import of `trustnoagent` — everything it needs is already plain data on the two `RunRecord`s.
+- [X] T025 [US4] Add `compare` to `tna_lab/__init__.py`'s exports.
+- [X] T026 GATE. T023 must now be green.
 
 **Checkpoint**: all four library primitives exist and are tested independently. The CLI (Phase 7) is the only thing standing between this and the quickstart.
 
@@ -168,14 +168,14 @@ Expected: green, `mypy --strict` clean. There is no prior baseline — Phase 1 s
 
 ### Tests first
 
-- [ ] T027 [P] Write `tests/test_cli.py`, invoking `tna_lab.cli.main` with `argv` directly (no subprocess needed) against a `tmp_path` workspace:
+- [X] T027 [P] Write `tests/test_cli.py`, invoking `tna_lab.cli.main` with `argv` directly (no subprocess needed) against a `tmp_path` workspace:
   - `ingest`, `freeze`, `run` (with a monkeypatched `evaluate_fn` — the CLI must expose a way to reach the same test seam T018 used, or the test uses `trust-no-agent`'s own offline error-result path exactly as T019 does), and `compare` each produce a result identical to the equivalent library call, for every story's happy path and at least one error path (an unknown snapshot tag, a mismatched comparison);
   - every subcommand accepts `--workspace <path>` and none reads an environment variable for it (research R4).
 
 ### Implementation
 
-- [ ] T028 Create `tna_lab/cli.py`: one `argparse` parser, four subcommands (`ingest`, `freeze`, `run`, `compare`), each parsing arguments and calling the matching library function — no logic beyond argument parsing and result formatting lives here (Article II's "route handler" prohibition, applied to a CLI instead of a web framework).
-- [ ] T029 GATE. T027 must now be green.
+- [X] T028 Create `tna_lab/cli.py`: one `argparse` parser, four subcommands (`ingest`, `freeze`, `run`, `compare`), each parsing arguments and calling the matching library function — no logic beyond argument parsing and result formatting lives here (Article II's "route handler" prohibition, applied to a CLI instead of a web framework).
+- [X] T029 GATE. T027 must now be green.
 
 **Checkpoint**: the quickstart's CLI walkthrough works end to end (modulo a real `JUDGE_MODEL`/`GENERATOR_MODEL` and, for live evaluators, `NVIDIA_API_KEY`).
 
@@ -185,8 +185,8 @@ Expected: green, `mypy --strict` clean. There is no prior baseline — Phase 1 s
 
 **Purpose**: the constitution's import-boundary rule becomes a real, checked test, and the package is CI-ready.
 
-- [ ] T030 [P] Write `tests/test_article_i_boundary.py`: walk every `.py` file under `tna_lab/`, parse its imports, and assert none imports `ragas` or `deepeval`, directly or via `import ragas.<anything>` (rule 1). This test must pass by construction, since no task above ever imports either — it exists so a *future* change that violates Article I fails CI, not code review.
-- [ ] T031 [P] Create `.github/workflows/ci.yml`: `uv sync`, then `uv run pytest`, `uv run ruff check .`, `uv run mypy .`, on push and pull_request — mirroring trust-no-agent's own default-offline CI job in spirit (no live credentials in this job's environment at all, since nothing in this feature's default test path needs one).
-- [ ] T032 Final GATE: `uv run pytest && uv run ruff check . && uv run mypy .`. Then run the full [quickstart.md](quickstart.md) by hand once, end to end, with real `JUDGE_MODEL`/`GENERATOR_MODEL` values, to confirm the default `evaluate_fn` wiring (not just the fake) actually reaches trust-no-agent.
+- [X] T030 [P] Write `tests/test_article_i_boundary.py`: walk every `.py` file under `tna_lab/`, parse its imports, and assert none imports `ragas` or `deepeval`, directly or via `import ragas.<anything>` (rule 1). This test must pass by construction, since no task above ever imports either — it exists so a *future* change that violates Article I fails CI, not code review.
+- [X] T031 [P] Create `.github/workflows/ci.yml`: `uv sync`, then `uv run pytest`, `uv run ruff check .`, `uv run mypy .`, on push and pull_request — mirroring trust-no-agent's own default-offline CI job in spirit (no live credentials in this job's environment at all, since nothing in this feature's default test path needs one).
+- [X] T032 Final GATE: `uv run pytest && uv run ruff check . && uv run mypy .`. Then run the full [quickstart.md](quickstart.md) by hand once, end to end, with real `JUDGE_MODEL`/`GENERATOR_MODEL` values, to confirm the default `evaluate_fn` wiring (not just the fake) actually reaches trust-no-agent.
 
 **Checkpoint**: v0.1.0 is feature-complete for spec 001. Tag and release are a separate, later decision — not part of this task list.

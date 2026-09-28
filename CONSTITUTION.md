@@ -1,5 +1,29 @@
 <!--
-SYNC IMPACT REPORT — Initial ratification (DRAFT), 2026-09-28
+SYNC IMPACT REPORT — First amendment, 2026-09-28
+Ordinal step: Initial ratification (DRAFT) → First amendment. Under semver this step would
+be MINOR — one article added, one existing rule strengthened with evidence; nothing removed,
+nothing this repo's zero lines of code could regress.
+Modified: Article IV gains a dated-evidence clause. The "no multi-provider abstraction" rule
+  was a design preference on 2026-09-28's draft; it is now backed by primary-source evidence
+  that every platform researched which built one has documented, still-open breakage from it,
+  on exactly the shape of endpoint tna-lab depends on (an unlisted OpenAI-compatible model).
+Added: Article VIII — The v1 Slice, locking the first three primitives (dataset, run,
+  compare) as what a first version builds, naming the versioning model the category already
+  converged on (append-only, timestamp-keyed snapshots — not a git-like diff/branch model),
+  and stating explicitly that a trace/OTel ingestion format is a deferred decision, not a
+  rejected one — the standard itself is unsettled (see the cited evidence).
+Renumbered: former Article VIII (Process) → Article IX. No article's rule changed as a
+  result of renumbering.
+Evidence source: a dated deep-research pass, committed at
+  docs/research/landscape-2026-09-28.md, covering Arize Phoenix, Langfuse, Helicone,
+  TruLens, OpenLLMetry, Comet Opik, TensorZero, Braintrust, W&B Weave, LangSmith,
+  Confident AI, Galileo and PromptLayer. Cited inline where it bears on a rule, the same
+  convention trust-no-agent uses for docs/research/brief.md and docs/api-notes.md.
+Unchanged on purpose: Articles 0, I, II, III, V, VI, VII — none needed evidence to be
+  correct; they follow from what tna-lab has already decided not to be (Article X of
+  trust-no-agent's own constitution), not from what the market currently does.
+
+Prior report — Initial ratification (DRAFT), 2026-09-28
 This is the founding version. No prior articles exist, no amendment history to report, no
 recorded evidence to preserve or invalidate. Unlike trust-no-agent's constitution, nothing
 below is backed by a measurement, a bisection, or a named enforcing test yet — the repo it
@@ -84,6 +108,8 @@ On a cold machine, with no API key required until they deliberately configure a 
 
 **Forbidden.** A `provider=` parameter. A second `JUDGE_MODEL`-shaped env var under a different name. Constructing an NVIDIA client, or any other model client, directly inside `tna_lab/`.
 
+**This is not an unexamined preference — every platform researched that built the thing this article forbids has documented, still-open breakage from it, on exactly the shape of endpoint tna-lab depends on.** *(First amendment, dated evidence, 2026-09-28.)* DeepEval's `OpenAIModel` performs a lookup against a hand-maintained model catalog and crashes outright on an unrecognized OpenAI-compatible model id — structurally the same situation as pointing a judge at an NVIDIA NIM endpoint (`docs/research/landscape-2026-09-28.md`, citing DeepEval issue #3133, open as of the research date). Langfuse's server-side "LLM Connections" abstraction shows the identical failure from a different angle: a user pointing an evaluator at an OpenAI-compatible endpoint behind a LiteLLM proxy hit a persistent, unresolved validation-step failure despite confirmed network reachability (Langfuse discussion #8689). Deferring to *someone else's* abstraction does not avoid this either — LiteLLM itself, which several of these tools lean on to be the universal provider layer, carries over 1,000 open issues including cross-provider parameter-leakage bugs, and Ragas' own LangChain-deferred approach still surfaces local-model failures traceable to that layer. **The lesson is not "build a better abstraction" — it is that interception of judge/generator configuration is where mature, well-resourced projects are still visibly bleeding, and the fix is not to intercept it at all.** This clause does not change the rule above; it is the reason the rule is not up for reconsideration when a "just one convenience flag" feature request eventually arrives.
+
 ---
 
 ## Article V — Determinism and Cost Stay Visible
@@ -112,8 +138,25 @@ Deliberately absent, at least for a first version: multi-tenant auth/RBAC; a hos
 
 ---
 
-## Article VIII — Process
+## Article VIII — The v1 Slice *(First amendment)*
+
+**Rule.** A first version builds exactly three primitives — dataset, run, compare — and nothing else. This is not an incomplete first draft of a bigger plan; it is the deliberately smallest thing that is already more useful than calling `trustnoagent.evaluators.evaluate()` by hand, chosen because it is where the evidence says this category's durable value actually sits, not where its scoring math sits (`docs/research/landscape-2026-09-28.md`).
+
+- **Dataset.** Normalize raw records into a local dataset and freeze named, immutable snapshots. **Versioning is append-only and timestamp-keyed** — every mutation creates a new version, a name or tag can point at one, and a run can pin to a specific version for reproducible re-runs later. This is not a git-like DAG with diffs or branches between versions, and it is not supposed to be: no platform surveyed built that either, which is either a category-wide gap nobody has needed yet or a feature nobody has justified — either way, tna-lab does not build it first.
+- **Run.** Iterate a frozen snapshot, call trust-no-agent's `evaluate()` per Article I with `JUDGE_MODEL`/`GENERATOR_MODEL` passed through exactly as Article IV requires, and persist the result as a run record keyed to the dataset snapshot it scored.
+- **Compare.** Given two run records against the same dataset snapshot, return a structured, per-row score-delta diff — regressions and improvements named individually, not just an aggregate that moved. This is the one primitive in this list with the least existing prior art among the free-tier self-hostable tools (Phoenix and Opik expose comparison only as a UI feature, not a documented SDK object) — building it well is where tna-lab adds something the free tier of this category does not yet have, not where it reimplements something already solved.
+
+**Explicitly deferred, not rejected.**
+- **A trace/span ingestion format.** The standard itself is unsettled: OpenTelemetry's GenAI semantic conventions carry no stable, tagged release, and Arize's competing OpenInference vocabulary has an open, unanswered question about its own relationship to that work. Committing tna-lab to either now would be picking a side in an argument neither party has finished having. If and when ingestion is built, the evidence points at Langfuse's posture — accept raw OTLP, branch on whichever attribute is present — over committing to one vocabulary as canonical (`docs/research/landscape-2026-09-28.md`).
+- **A shared or hosted view of results.** Every platform surveyed that started library-first eventually grew a server component. *When* users of a local-first tool outgrow that model is a real question this research could not answer — nothing in the evidence says how quickly. That transition is a future, deliberate decision, made once the dataset/run/compare core has actually proven itself, not pulled forward into v1 on the same instinct that produced the provider-abstraction hazard Article IV documents.
+- Everything Article VII already places out of scope remains out of scope; this article does not reopen it.
+
+**Enforced by (to be built).** A spec for anything beyond dataset/run/compare cites which of these two deferred items it is un-deferring, and why, the same discipline Article II.c of trust-no-agent's constitution required of its own scope expansion.
+
+---
+
+## Article IX — Process
 
 Built with Claude Code, Spec-Driven Development, the same approach used for trust-no-agent and pr-mci-checker: constitution first, then specs, then tasks, then implementation — each amendable in the open when reality disagrees with the plan.
 
-**This document is the proposal, not the ratification.** It is reviewed and amended before Spec Kit's `/specify` step begins, not after.
+**This document was the proposal; it is now the working constitution.** Spec Kit's `/specify` step targets Article VIII's v1 slice. A future amendment is still open at any time — it is amended in the open, per Article 0, not violated in silence.

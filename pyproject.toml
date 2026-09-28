@@ -1,0 +1,46 @@
+[project]
+name = "tna-lab"
+version = "0.1.0"
+description = "A self-hostable dataset/run/compare platform built on trust-no-agent."
+readme = "README.md"
+requires-python = "==3.12.*"
+license = "MIT"
+authors = [{ name = "darshan-panchal1" }]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Software Development :: Quality Assurance",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3 :: Only",
+    "Operating System :: OS Independent",
+]
+
+# Exact pins only (Constitution Article VI).
+dependencies = [
+    "trust-no-agent==1.1.0",
+]
+
+[project.scripts]
+tna-lab = "tna_lab.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["tna_lab"]
+
+[dependency-groups]
+dev = [
+    "pytest==9.1.1",
+    "ruff==0.16.5",
+    "mypy==2.3.1",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.mypy]
+strict = true

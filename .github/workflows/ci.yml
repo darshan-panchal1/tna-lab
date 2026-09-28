@@ -1,0 +1,46 @@
+# T031: the GATE on every push and PR — pytest, ruff, mypy --strict. No credential of any
+# kind is in this job's environment: nothing on tna-lab's default test path needs one
+# (run() is tested through a fake evaluate_fn, research R6, and the one real-evaluate test
+# asserts on trust-no-agent's own offline error result). Mirrors trust-no-agent's
+# offline.yml in spirit.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: pytest, ruff, mypy (offline, no credentials)
+    runs-on: ubuntu-latest
+    # Not credentials: importing trustnoagent loads ragas and deepeval, so their telemetry
+    # is switched off here exactly as trust-no-agent's own CI does (Constitution Article III).
+    env:
+      DEEPEVAL_TELEMETRY_OPT_OUT: "YES"
+      RAGAS_DO_NOT_TRACK: "true"
+      DEEPEVAL_DISABLE_DOTENV: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # --frozen: uv.lock is the pin (Article VI). Drift fails the job instead of silently
+      # installing something the suite was never run against. Python comes from
+      # .python-version (3.12).
+      - name: Install exact pins
+        run: uv sync --frozen
+
+      - name: Tests
+        run: uv run pytest
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Types
+        run: uv run mypy .

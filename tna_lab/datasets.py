@@ -3,12 +3,15 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from tna_lab.records import DatasetRecord, record_id
 from tna_lab.storage import overwrite_json, read_json, write_json
+
+_FIELDS = frozenset({"input", "output", "expected", "contexts", "metadata"})
 
 
 @dataclass(frozen=True)
@@ -47,3 +50,35 @@ def ingest(workspace: Path, dataset: str, records: Iterable[DatasetRecord]) -> I
 
     overwrite_json(head_path, {"record_ids": sorted(head_ids)})
     return IngestResult(added=added, already_present=already_present)
+
+
+def load_jsonl(path: Path) -> list[DatasetRecord]:
+    """Parse one DatasetRecord per non-blank line of a JSONL file (FR-001).
+
+    Raises ValueError naming the file and line for a line that is not a JSON object, or
+    that carries a field outside trust-no-agent's EvalRecord five — never silently drops it.
+    """
+    records = []
+    for lineno, line in enumerate(path.read_text().splitlines(), start=1):
+        if not line.strip():
+            continue
+        data = json.loads(line)
+        if not isinstance(data, dict):  # bad input data, not a caller's programming error
+            kind = type(data).__name__
+            raise ValueError(f"{path}:{lineno}: expected a JSON object, got {kind}")  # noqa: TRY004
+        if unknown := sorted(data.keys() - _FIELDS):
+            raise ValueError(
+                f"{path}:{lineno}: unknown field(s) {', '.join(map(repr, unknown))}; "
+                f"a record has only {', '.join(sorted(_FIELDS))}"
+            )
+        contexts = data.get("contexts")
+        records.append(
+            DatasetRecord(
+                input=data.get("input"),
+                output=data.get("output"),
+                expected=data.get("expected"),
+                contexts=tuple(contexts) if contexts is not None else None,
+                metadata=data.get("metadata", {}),
+            )
+        )
+    return records

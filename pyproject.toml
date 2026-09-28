@@ -44,3 +44,9 @@ line-length = 100
 
 [tool.mypy]
 strict = true
+
+# trust-no-agent 1.1.0 ships no py.typed marker. Analyze its source rather than ignore it,
+# so EvalRecord/EvalResult/JudgeConfig keep their real types instead of collapsing to Any.
+[[tool.mypy.overrides]]
+module = ["trustnoagent", "trustnoagent.*", "evals", "evals.*"]
+follow_untyped_imports = true

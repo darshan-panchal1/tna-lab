@@ -1,5 +1,31 @@
 <!--
-SYNC IMPACT REPORT — First amendment, 2026-09-28
+SYNC IMPACT REPORT — Second amendment, 2026-09-29
+Ordinal step: First amendment → Second amendment. Under semver this step would be PATCH —
+one existing article's deferred list gains an item that was always true of the design and is
+now written down. No rule changed, no article added or renumbered, and no shipped behavior
+is affected: spec 001's code already behaves exactly as the new clause describes.
+Modified: Article VIII's "Explicitly deferred, not rejected" list gains a third item —
+  comparing two different sets of outputs for the same inputs ("did my agent's behavior get
+  better"). This was an unstated consequence of two decisions already made, not a new
+  restriction: spec 001's record identity is a hash over all five record fields, `output`
+  included (specs/001-dataset-run-compare/research.md R1), and `compare()` requires both
+  runs to carry the same `snapshot_id` and matches records by `record_id` (FR-021). Together
+  those mean a comparison can only re-score one frozen set of input/output pairs under
+  different judging, never diff two output sets for the same inputs. Naming it here makes it
+  a deferral with a named path out, rather than a gap a reader discovers by trying it.
+  The article's "Enforced by" clause now reads "three deferred items" rather than "two".
+Evidence source: the spec 001 quickstart validated end to end against a live NVIDIA NIM
+  judge on 2026-09-29 (tna.ragas.faithfulness, both records ok, score 1.0). Re-running one
+  frozen snapshot produced byte-identical scores and fingerprints served from the workspace
+  evidence cache — the observation that made the limitation concrete rather than theoretical,
+  since the walkthrough's own step 3 had until then described a second run as scoring
+  "a (hypothetically) improved generator", which the identity model cannot express. Not a
+  market-research pass: no claim here rests on what other platforms do.
+Unchanged on purpose: every other article, and Article VIII's three primitives and
+  append-only versioning model. Article IV's dated-evidence clause and the First amendment's
+  cited research are untouched and still current.
+
+Prior report — First amendment, 2026-09-28
 Ordinal step: Initial ratification (DRAFT) → First amendment. Under semver this step would
 be MINOR — one article added, one existing rule strengthened with evidence; nothing removed,
 nothing this repo's zero lines of code could regress.
@@ -138,7 +164,7 @@ Deliberately absent, at least for a first version: multi-tenant auth/RBAC; a hos
 
 ---
 
-## Article VIII — The v1 Slice *(First amendment)*
+## Article VIII — The v1 Slice *(First amendment; deferred list extended by the Second)*
 
 **Rule.** A first version builds exactly three primitives — dataset, run, compare — and nothing else. This is not an incomplete first draft of a bigger plan; it is the deliberately smallest thing that is already more useful than calling `trustnoagent.evaluators.evaluate()` by hand, chosen because it is where the evidence says this category's durable value actually sits, not where its scoring math sits (`docs/research/landscape-2026-09-28.md`).
 
@@ -149,9 +175,12 @@ Deliberately absent, at least for a first version: multi-tenant auth/RBAC; a hos
 **Explicitly deferred, not rejected.**
 - **A trace/span ingestion format.** The standard itself is unsettled: OpenTelemetry's GenAI semantic conventions carry no stable, tagged release, and Arize's competing OpenInference vocabulary has an open, unanswered question about its own relationship to that work. Committing tna-lab to either now would be picking a side in an argument neither party has finished having. If and when ingestion is built, the evidence points at Langfuse's posture — accept raw OTLP, branch on whichever attribute is present — over committing to one vocabulary as canonical (`docs/research/landscape-2026-09-28.md`).
 - **A shared or hosted view of results.** Every platform surveyed that started library-first eventually grew a server component. *When* users of a local-first tool outgrow that model is a real question this research could not answer — nothing in the evidence says how quickly. That transition is a future, deliberate decision, made once the dataset/run/compare core has actually proven itself, not pulled forward into v1 on the same instinct that produced the provider-abstraction hazard Article IV documents.
+- **Comparing two different sets of outputs for the same inputs** — "did my agent's behavior get better?". This is deferred deliberately, and it is worth being blunt that it is the question a team most wants answered. v1 cannot express it, by construction: a record's identity is a hash over all five of its fields, `output` among them, so an improved answer to the same question is a *different record* with a different id, in a different snapshot — and `compare()` requires both runs to carry the same `snapshot_id`, matching records by that id. What v1 compares, therefore, is two judgings of one frozen set of input/output pairs: a different judge model, a different evaluator, an edited rubric. That is genuinely useful — it is how a team learns whether a judge change moved its numbers — but it is not behavioral regression testing of an agent.
+
+  This is the natural scope of spec 002, and there are two ways in, neither of which v1 forecloses: separate *input identity* (`input`/`expected`/`contexts`) from the output, making an output an attribute of a run against an input rather than part of what identifies a record; or keep record identity as it is and teach `compare()` to match by input identity across two different snapshots instead of requiring one shared `snapshot_id`. The first is the deeper change and the better long-term shape; the second is reachable without re-ingesting anything. A spec that picks one states why, per this article's "Enforced by" clause below.
 - Everything Article VII already places out of scope remains out of scope; this article does not reopen it.
 
-**Enforced by (to be built).** A spec for anything beyond dataset/run/compare cites which of these two deferred items it is un-deferring, and why, the same discipline Article II.c of trust-no-agent's constitution required of its own scope expansion.
+**Enforced by (to be built).** A spec for anything beyond dataset/run/compare cites which of these three deferred items it is un-deferring, and why, the same discipline Article II.c of trust-no-agent's constitution required of its own scope expansion.
 
 ---
 

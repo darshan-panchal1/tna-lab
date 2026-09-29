@@ -1,0 +1,62 @@
+# Publishes to real PyPI via Trusted Publishing (OIDC) — no stored token, ever: `id-token:
+# write` gets a short-lived credential from GitHub, which PyPI trusts because this exact
+# owner/repo/workflow/environment was registered as a trusted publisher (pypi.org project
+# settings). Mirrors trust-no-agent's own publish.yml, which is already proven against real
+# PyPI, with one deliberate difference and one carried over unchanged:
+#
+#   - Trigger. trust-no-agent publishes on `workflow_dispatch` only, reasoning that a PyPI
+#     publish is irreversible — a version number can never be reused, even after deletion —
+#     so it must not fire automatically. That reasoning holds here. This workflow adds a
+#     `v*` tag trigger anyway, because pushing an annotated release tag is itself the
+#     deliberate act that gate was protecting against, and a release that publishes from the
+#     tag it is named for cannot drift from it. `workflow_dispatch` is kept as the manual
+#     path for a re-run.
+#   - Environment. `environment: pypi` is carried over unchanged, and is what keeps the tag
+#     trigger safe: it is where PyPI's trusted-publisher registration is pinned, and adding
+#     a required reviewer to it in repo settings turns any publish — tag-triggered or
+#     manual — back into an approval. Without protection rules it does not block, so the
+#     tag trigger is only as deliberate as the tag.
+#
+# A version already on PyPI cannot be overwritten: re-running this for an existing version
+# fails at the upload step, which is the desired outcome, not a bug to work around.
+name: publish
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # the OIDC token Trusted Publishing exchanges; no PyPI token is stored
+
+jobs:
+  publish:
+    name: Build and publish to PyPI
+    runs-on: ubuntu-latest
+    environment: pypi
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # The same gate ci.yml runs, repeated here rather than assumed: a tag can point at any
+      # commit, including one that never passed CI, and an irreversible publish is the last
+      # place to find that out. --frozen: uv.lock is the pin (Article VI).
+      - name: Install exact pins
+        run: uv sync --frozen
+
+      - name: Gate (pytest, ruff, mypy)
+        run: |
+          uv run pytest -q
+          uv run ruff check .
+          uv run mypy .
+
+      - name: Build sdist and wheel
+        run: uv build
+
+      - name: Publish to PyPI
+        run: uv publish --trusted-publishing automatic

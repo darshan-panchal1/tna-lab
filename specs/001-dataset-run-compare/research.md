@@ -12,6 +12,8 @@ Unlike trust-no-agent's research phase, there is no existing library behavior to
 
 **Rejected alternative.** A sequential/UUID id assigned at ingestion time. Rejected because it makes re-ingestion detection require a full-content scan of the existing dataset, and it makes two independently-ingested copies of the same record look like different records — which breaks FR-003 outright.
 
+**Consequence — this is why `compare()` can only re-judge, never diff two output sets.** Because `output` is one of the hashed fields, an improved answer to the same question is not the same record with a new value; it is a different `record_id`, reachable only in a different snapshot. `compare()` requires both runs to carry the same `snapshot_id` and pairs records by that id (FR-021, R7), so what it compares is two *judgings* of one frozen set of input/output pairs — a different judge model, evaluator, or rubric. It cannot answer "same inputs, before and after my agent changed," which is the question a team actually wants. That is a deliberate v1 deferral, not an oversight: CONSTITUTION.md Article VIII (Second amendment, 2026-09-29) names it and sketches the two ways out — separate input identity from output so an output belongs to a run rather than to a record's identity, or teach `compare()` to pair by input identity across two snapshots instead of requiring one shared `snapshot_id`. Spec 002's natural scope.
+
 ## R2 — Snapshot identity is independent of its human-readable tag
 
 **Decision.** `snapshot_id = sha256(canonical_json({"dataset": name, "record_ids": sorted(record_ids), "frozen_at": <ISO-8601 UTC timestamp with microsecond precision>, "nonce": <16 random hex chars>}))`. The human-readable `<dataset>@<tag>` is a pointer to this id, stored in `snapshots/<tag>.json`, never the id itself.
@@ -66,6 +68,8 @@ The workspace root defaults to `.tna-lab/` under the current working directory a
 ## R7 — Comparison deltas branch on output type, not on a single numeric assumption
 
 **Decision.** `compare()` inspects each record's two results' output type. Score-producing evaluators get a numeric delta (`score_b - score_a`); label-producing evaluators get a transition string (`"pass" → "fail"`); a status change (e.g. `ok → invalid_output`) is reported as its own field regardless of output type, per FR-023.
+
+**Scope.** Both branches diff two judgings of the *same* frozen record, per R1's consequence note above — never two different outputs for one input, which Article VIII defers to a later spec. A `Comparison`'s per-record rows therefore always pair a `record_id` with itself.
 
 **Why (FR-020, FR-024).** Not every evaluator trust-no-agent ships produces a score — rubric judges with `labels` set produce a label, not a number (trust-no-agent's own `OutputType` literal is `"score" | "label" | "bool"`). A comparison that assumed numeric scores everywhere would either crash or silently misreport label-based evaluators — Article VIII names comparison as this feature's differentiator, and getting it wrong here is the sharpest possible way to fail at that.
 

@@ -7,7 +7,7 @@ requires-python = "==3.12.*"
 license = "MIT"
 authors = [{ name = "darshan-panchal1" }]
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Topic :: Software Development :: Testing",
     "Topic :: Software Development :: Quality Assurance",
@@ -21,6 +21,11 @@ classifiers = [
 dependencies = [
     "trust-no-agent==1.1.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/darshan-panchal1/tna-lab"
+Repository = "https://github.com/darshan-panchal1/tna-lab"
+Issues = "https://github.com/darshan-panchal1/tna-lab/issues"
 
 [project.scripts]
 tna-lab = "tna_lab.cli:main"

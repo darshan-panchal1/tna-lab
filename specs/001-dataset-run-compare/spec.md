@@ -165,7 +165,7 @@ A developer has two run records — before and after some change to their agent 
 - **SC-004**: 100% of `EvalResult` fields trust-no-agent returns (status, score, label, fingerprint, token counts, latency) survive a full ingest → freeze → run → compare cycle unmodified in the run record.
 - **SC-005**: Every non-`ok` result in a run (across `error`, `skipped`, `invalid_output`) appears in that run's record count — none are silently dropped, and comparing two runs containing them never crashes or coerces them to a score.
 - **SC-006**: Comparing two runs against mismatched snapshots or mismatched evaluator ids fails with a named reason 100% of the time; it never silently produces a comparison.
-- **SC-007**: A regression deliberately introduced into one record between two runs is named individually in the comparison output, not merged into an aggregate figure that could hide it.
+- **SC-007**: Scoring one frozen snapshot twice under different judging (a different judge model, evaluator, or rubric) surfaces any resulting classification change per record in the comparison output, not merged into an aggregate figure that could hide it.
 - **SC-008**: Every capability this spec defines is exercised by both a library-level test and a CLI-level test, and both produce identical results, for every user story.
 
 ## Assumptions

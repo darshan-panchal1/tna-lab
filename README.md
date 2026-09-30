@@ -89,13 +89,23 @@ tna-lab run agent-v2@base --evaluator tna.ragas.faithfulness --live    # prints 
 tna-lab compare-cases <run_v1> <run_v2> --evaluator tna.ragas.faithfulness
 ```
 
-A *case* is a record's `input` plus its `expected`. The output is free to differ, since that is what is being compared, and so are the retrieved `contexts`, which in trust-no-agent's own model are agent output too. The report opens by saying so, so it can never be mistaken for `compare`'s:
+A *case* is a record's `input` plus its `expected`. The output is free to differ, since that is what is being compared, and so are the retrieved `contexts`, which in trust-no-agent's own model are agent output too. The report opens by saying how it matched, so it can never be mistaken for `compare`'s. This is real output from a live run, scoring `tna.ragas.faithfulness` for two versions of a three-question agent:
 
 ```
 matched by case (input + expected) across snapshots — no same-snapshot guarantee
+run a: 20260930T190306Z-5bd26ead (agent-v1@base)  run b: 20260930T190342Z-913b9a2f (agent-v2@base)  judge: nvidia/nemotron-3-super-120b-a12b
+case          status  a       b       delta    class      ctx  out  fingerprint a → b            tokens a → b
+960fcf6372d0  ok      0.0000  1.0000  +1.0000  improved   -    yes  e1a5a34e8af4 → e13108284261  1904/542 → 1914/560
+eba9b124300b  ok      1.0000  1.0000  +0.0000  unchanged  yes  -    0659fb5515c9 → 89a0850639cd  1919/842 → 1927/544
+unmatched in a (1):
+  f277416ee994  no_counterpart  ok  0.0000  fingerprint 86e8cf884297  tokens 1903/544
+unmatched in b (1):
+  e5ba707427ec  no_counterpart  ok  1.0000  fingerprint 587f59c30be0  tokens 1929/858
+ambiguous (0):
+summary: paired=2 improved=1 regressed=0 unchanged=1 contexts_changed=1 output_changed=1 unmatched_a=1 unmatched_b=1 ambiguous=0 mean_score_delta=+0.5000 pass_rate_delta=-
 ```
 
-Then it shows one row per paired case, with the same columns `compare` shows plus `ctx` and `out` flags for a changed context or output. It then accounts for everything it could not pair, each record listed individually: `unmatched in a (n):`, `unmatched in b (n):` and `ambiguous (n):`. A case present on only one side is unmatched. A case carried by more than one record in a run is ambiguous, and it is listed, never guessed at. The summary line counts all of it, so "3 improved" can never quietly mean "3 improved, and 40 were not looked at".
+Two cases paired. The first was a wrong answer in v1 (it claimed to ship worldwide against a US-only context) that v2 fixed, so `out` is set and it is classified `improved`. The second has the same answer in both versions but a different retrieved context (`ctx`), which is still paired, still counted, and flagged. The question only v1 has and the one only v2 has are each listed under their own side, with their own score. The report then accounts for everything it could not pair: a case present on only one side is unmatched, and a case carried by more than one record in a run is ambiguous, and listed, never guessed at. The summary line counts all of it, so "1 improved" can never quietly mean "1 improved, and 40 were not looked at".
 
 Two runs scored under different judge or generator models are refused, with an error naming both. There is no override: a delta across two judges would credit the agent with the judge's variance.
 

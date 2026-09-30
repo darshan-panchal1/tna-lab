@@ -1,5 +1,46 @@
 <!--
-SYNC IMPACT REPORT — Second amendment, 2026-09-29
+SYNC IMPACT REPORT — Third amendment, 2026-10-01
+Ordinal step: Second amendment → Third amendment. Under semver this step would be MINOR —
+a capability the Second amendment deferred is now delivered, and the article's Compare
+primitive gains a sibling. No rule was relaxed or removed, and no article was added or
+renumbered. The "exactly three primitives" rule stands: case comparison extends Compare
+rather than adding a fourth primitive.
+Modified: Article VIII.
+  - The third "Explicitly deferred, not rejected" item — comparing two different sets of
+    outputs for the same inputs — is removed. Spec 002 (specs/002-compare-outputs/) un-defers
+    it, as this article's "Enforced by" clause requires a spec to do, naming that item and no
+    other. `compare_cases()` and `tna-lab compare-cases` ship it (v0.2.0).
+  - The Compare bullet gains its sibling: a comparison that pairs records by case across
+    two snapshots, with the judge held fixed. `compare()` is unchanged, including its
+    same-snapshot requirement.
+  - The "Enforced by" clause now reads "two deferred items" rather than "three".
+  - The heading's amendment note records this amendment.
+  - NOT what the Second amendment sketched. That text named two routes and described the
+    first as separating "input identity (`input`/`expected`/`contexts`)" from the output.
+    Spec 002 took neither route as written. It kept record identity, snapshots and
+    `compare()` untouched, and pairs by a case key of `input` + `expected` only, computed at
+    comparison time and never stored (specs/002-compare-outputs/research.md R1–R3). `contexts`
+    is excluded because trust-no-agent's own mapping fills it from the agent's retrieved
+    chunks (`evals/adapters/ragas_adapter.py`), so it is agent output, not part of a test
+    case; a key that included it would leave a better retriever's best improvements
+    unpaired. The Second amendment's parenthetical was a sketch, and this records where the
+    built design differs from it and why.
+Evidence source: spec 002's design research, which read trust-no-agent's source rather than
+  surveying the market, and its validation. The quickstart was walked end to end against a
+  live NVIDIA NIM judge on 2026-09-30 (UTC; tna.ragas.faithfulness, nemotron-3-super for
+  judge and generator). Two output sets paired into one improved case (an answer fixed from
+  a scored 0.0 to 1.0) and one unchanged case with a changed retrieved context, flagged but
+  still counted. One case present only in each set was listed under its own side, a judge
+  mismatch was refused, and two output sets ingested into one dataset were reported as
+  ambiguous rather than guessed at. 163 tests pass, including a check that every scored
+  record lands in exactly one place (paired, unmatched or ambiguous).
+Unchanged on purpose: Articles 0 through VII and IX; Article VIII's three primitives and
+  its append-only, timestamp-keyed versioning model; and the two items that remain deferred
+  — a trace/span ingestion format and a shared or hosted view. Separating outputs from
+  record identity entirely (the Second amendment's first route) is not built and not
+  foreclosed. It is a spec-level decision, not a deferred item of this article.
+
+Prior report — Second amendment, 2026-09-29
 Ordinal step: First amendment → Second amendment. Under semver this step would be PATCH —
 one existing article's deferred list gains an item that was always true of the design and is
 now written down. No rule changed, no article added or renumbered, and no shipped behavior
@@ -164,7 +205,7 @@ Deliberately absent, at least for a first version: multi-tenant auth/RBAC; a hos
 
 ---
 
-## Article VIII — The v1 Slice *(First amendment; deferred list extended by the Second)*
+## Article VIII — The v1 Slice *(First amendment; deferred list extended by the Second, and narrowed by the Third)*
 
 **Rule.** A first version builds exactly three primitives — dataset, run, compare — and nothing else. This is not an incomplete first draft of a bigger plan; it is the deliberately smallest thing that is already more useful than calling `trustnoagent.evaluators.evaluate()` by hand, chosen because it is where the evidence says this category's durable value actually sits, not where its scoring math sits (`docs/research/landscape-2026-09-28.md`).
 
@@ -172,15 +213,14 @@ Deliberately absent, at least for a first version: multi-tenant auth/RBAC; a hos
 - **Run.** Iterate a frozen snapshot, call trust-no-agent's `evaluate()` per Article I with `JUDGE_MODEL`/`GENERATOR_MODEL` passed through exactly as Article IV requires, and persist the result as a run record keyed to the dataset snapshot it scored.
 - **Compare.** Given two run records against the same dataset snapshot, return a structured, per-row score-delta diff — regressions and improvements named individually, not just an aggregate that moved. This is the one primitive in this list with the least existing prior art among the free-tier self-hostable tools (Phoenix and Opik expose comparison only as a UI feature, not a documented SDK object) — building it well is where tna-lab adds something the free tier of this category does not yet have, not where it reimplements something already solved.
 
+  Compare has a second form, added by the Third amendment: given two run records against *different* snapshots, pair their records by case — the same `input` and `expected` — and return the same per-case diff, so a team can ask whether its agent's outputs got better and not only whether its judge moved. The two forms answer different questions and carry different guarantees, and neither may be presented as the other. The same-snapshot form holds the records fixed and lets the judging differ; the case form holds the judging fixed, refusing two runs scored by different judge or generator models with no override, and lets the outputs differ. Because it cannot promise that every record pairs, it must account for every record it could not: one unmatched, or carried by more than one record in a run, is listed individually and never dropped, guessed at, or fuzzily matched.
+
 **Explicitly deferred, not rejected.**
 - **A trace/span ingestion format.** The standard itself is unsettled: OpenTelemetry's GenAI semantic conventions carry no stable, tagged release, and Arize's competing OpenInference vocabulary has an open, unanswered question about its own relationship to that work. Committing tna-lab to either now would be picking a side in an argument neither party has finished having. If and when ingestion is built, the evidence points at Langfuse's posture — accept raw OTLP, branch on whichever attribute is present — over committing to one vocabulary as canonical (`docs/research/landscape-2026-09-28.md`).
 - **A shared or hosted view of results.** Every platform surveyed that started library-first eventually grew a server component. *When* users of a local-first tool outgrow that model is a real question this research could not answer — nothing in the evidence says how quickly. That transition is a future, deliberate decision, made once the dataset/run/compare core has actually proven itself, not pulled forward into v1 on the same instinct that produced the provider-abstraction hazard Article IV documents.
-- **Comparing two different sets of outputs for the same inputs** — "did my agent's behavior get better?". This is deferred deliberately, and it is worth being blunt that it is the question a team most wants answered. v1 cannot express it, by construction: a record's identity is a hash over all five of its fields, `output` among them, so an improved answer to the same question is a *different record* with a different id, in a different snapshot — and `compare()` requires both runs to carry the same `snapshot_id`, matching records by that id. What v1 compares, therefore, is two judgings of one frozen set of input/output pairs: a different judge model, a different evaluator, an edited rubric. That is genuinely useful — it is how a team learns whether a judge change moved its numbers — but it is not behavioral regression testing of an agent.
-
-  This is the natural scope of spec 002, and there are two ways in, neither of which v1 forecloses: separate *input identity* (`input`/`expected`/`contexts`) from the output, making an output an attribute of a run against an input rather than part of what identifies a record; or keep record identity as it is and teach `compare()` to match by input identity across two different snapshots instead of requiring one shared `snapshot_id`. The first is the deeper change and the better long-term shape; the second is reachable without re-ingesting anything. A spec that picks one states why, per this article's "Enforced by" clause below.
 - Everything Article VII already places out of scope remains out of scope; this article does not reopen it.
 
-**Enforced by (to be built).** A spec for anything beyond dataset/run/compare cites which of these three deferred items it is un-deferring, and why, the same discipline Article II.c of trust-no-agent's constitution required of its own scope expansion.
+**Enforced by (to be built).** A spec for anything beyond dataset/run/compare cites which of these two deferred items it is un-deferring, and why, the same discipline Article II.c of trust-no-agent's constitution required of its own scope expansion. Spec 002 is the worked example: it named the one item it took up, and only that one.
 
 ---
 

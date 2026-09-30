@@ -2,7 +2,7 @@
 
 **Feature**: [spec.md](spec.md) · **Research**: [research.md](research.md) · **Builds on**: [spec 001 data-model.md](../001-dataset-run-compare/data-model.md)
 
-Every type here is a frozen `dataclass` in a framework-free module, as in spec 001 (spec 001 research R8). This feature adds types and two functions. **It changes no existing type, field, file format or on-disk layout**: `DatasetRecord`, `record_id()`, `SnapshotRef`, `RunRecord`, `Comparison`, `RecordDelta` and `ComparisonSummary` are exactly as spec 001's data model defines them (spec FR-002, FR-006).
+Every type here is a frozen `dataclass` in a framework-free module, as in spec 001 (spec 001 research R8). This feature adds types and two functions. With one additive exception, `RecordDelta`'s token counts (below), **it changes no existing type, field, file format or on-disk layout**: `DatasetRecord`, `record_id()`, `SnapshotRef`, `RunRecord`, `Comparison`, `RecordDelta` and `ComparisonSummary` are exactly as spec 001's data model defines them (spec FR-002, FR-006).
 
 The new types are named as siblings of spec 001's comparison types, so the two comparison paths read as one family:
 
@@ -13,6 +13,17 @@ The new types are named as siblings of spec 001's comparison types, so the two c
 | `ComparisonSummary` | `CaseComparisonSummary` |
 | — | `UnmatchedCase` |
 | — | `AmbiguousCase` |
+
+## RecordDelta (spec 001): token counts added in v0.2.0
+
+This closes a v0.1.0 gap against Article V, and is not part of this feature's own scope (tasks.md T000). Article V requires the token counts trust-no-agent's `EvalResult` carries to be "aggregated and shown, not dropped". v0.1.0's `RecordDelta` carried both fingerprints and neither side's tokens. v0.2.0 adds four fields to it. Every field in [spec 001's RecordDelta table](../001-dataset-run-compare/data-model.md#recorddelta) is otherwise unchanged in name, type and meaning.
+
+| Field | Type | Notes |
+|---|---|---|
+| `tokens_in_a`, `tokens_in_b` | `int \| None` | Each run's `tokens_in` for this record, echoed from its `EvalResult`. `None` when the result carries none, as a non-`ok` result from trust-no-agent does. |
+| `tokens_out_a`, `tokens_out_b` | `int \| None` | The same for `tokens_out`. |
+
+The fields any two paired results share (status, score, label, delta, transition, `status_changed`, classification, fingerprints and token counts) are built by one private function in `compare.py`, which both `RecordDelta` and `CaseDelta` use. The two comparisons therefore cannot drift apart in what they show, just as they cannot in how they classify (spec FR-016). `tna-lab compare`'s table gains a `tokens a → b` column showing `in/out` per side.
 
 ## Case identity (`tna_lab/records.py`)
 
@@ -72,6 +83,7 @@ One paired case. Every field shared with `RecordDelta` carries exactly the meani
 | `contexts_changed` | `bool` | The two records' `contexts` differ, with absent and empty treated as different (spec FR-017). A case with this flag set is still classified and counted in every aggregate. |
 | `output_changed` | `bool` | The two records' `output` values differ (spec FR-018). |
 | `fingerprint_a`, `fingerprint_b` | `str \| None` | As `RecordDelta`. Each run's `judge_fingerprint` for its record (Article V; spec 001 FR-027). |
+| `tokens_in_a`, `tokens_in_b`, `tokens_out_a`, `tokens_out_b` | `int \| None` | As `RecordDelta` (see above). Each run's token counts for its record, so cost is shown beside every score (Article V). |
 
 No field records a `metadata` difference (spec FR-019).
 
@@ -88,6 +100,7 @@ One scored record that could not be paired (spec FR-013). It carries its own res
 | `score` | `float \| None` | |
 | `label` | `str \| None` | |
 | `fingerprint` | `str \| None` | This record's `judge_fingerprint` (Article V). |
+| `tokens_in`, `tokens_out` | `int \| None` | This record's token counts (Article V). An unpaired score is shown with its cost, as a paired one is. |
 
 ### AmbiguousCase
 

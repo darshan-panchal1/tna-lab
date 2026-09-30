@@ -534,3 +534,15 @@ def test_a_failing_comparison_writes_nothing_either(tmp_path: Path) -> None:
     with pytest.raises(ValueError):
         compare_cases(tmp_path, run_a, run_b, EVAL)
     assert _tree(tmp_path) == before
+
+
+def test_the_new_names_are_exported_from_the_package() -> None:
+    import tna_lab
+
+    for name in (
+        "compare_cases", "CaseComparison", "CaseDelta", "CaseComparisonSummary",
+        "UnmatchedCase", "AmbiguousCase",
+    ):
+        assert name in tna_lab.__all__
+        assert getattr(tna_lab, name) is getattr(__import__("tna_lab.compare", fromlist=[name]), name)
+    assert tna_lab.__all__ == sorted(tna_lab.__all__)

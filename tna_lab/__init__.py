@@ -12,14 +12,29 @@ import os
 os.environ.setdefault("DEEPEVAL_TELEMETRY_OPT_OUT", "YES")
 os.environ.setdefault("RAGAS_DO_NOT_TRACK", "true")
 
-from tna_lab.compare import Comparison, ComparisonSummary, RecordDelta, compare
+from tna_lab.compare import (
+    AmbiguousCase,
+    CaseComparison,
+    CaseComparisonSummary,
+    CaseDelta,
+    Comparison,
+    ComparisonSummary,
+    RecordDelta,
+    UnmatchedCase,
+    compare,
+    compare_cases,
+)
 from tna_lab.datasets import IngestResult, ingest
 from tna_lab.runs import EvaluateFn, RunRecord, load_run, run
 from tna_lab.snapshots import SnapshotRef, freeze, resolve
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
+    "AmbiguousCase",
+    "CaseComparison",
+    "CaseComparisonSummary",
+    "CaseDelta",
     "Comparison",
     "ComparisonSummary",
     "EvaluateFn",
@@ -27,8 +42,10 @@ __all__ = [
     "RecordDelta",
     "RunRecord",
     "SnapshotRef",
+    "UnmatchedCase",
     "__version__",
     "compare",
+    "compare_cases",
     "freeze",
     "ingest",
     "load_run",

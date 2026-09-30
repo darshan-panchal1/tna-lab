@@ -288,11 +288,32 @@ def _by_case(records: Mapping[str, DatasetRecord]) -> dict[str | None, list[str]
     return groups
 
 
+def _unmatched(
+    rid: str, cid: str | None, reason: UnmatchedReason, result: Mapping[str, Any]
+) -> UnmatchedCase:
+    return UnmatchedCase(
+        record_id=rid,
+        case_id=cid,
+        reason=reason,
+        status=result["status"],
+        score=result.get("score"),
+        label=result.get("label"),
+        fingerprint=result.get("judge_fingerprint"),
+        tokens_in=result.get("tokens_in"),
+        tokens_out=result.get("tokens_out"),
+    )
+
+
 def compare_cases(
     workspace: Path, run_a: RunRecord, run_b: RunRecord, evaluator_id: str
 ) -> CaseComparison:
     """Diff two runs' results for `evaluator_id`, pairing records by case — the same `input`
     and `expected` — across any two snapshots (spec 002). Reads record files; writes nothing.
+
+    Every record either run scored lands in exactly one place (FR-011): a CaseDelta when
+    its case has exactly one record on each side; an AmbiguousCase when either side has
+    more than one, never a guess; otherwise its side's unmatched list, as `no_counterpart`,
+    or `no_input` when it has no `input` and so no case (FR-003, FR-012-FR-014).
     """
     results_a = _results_for(run_a, evaluator_id)
     results_b = _results_for(run_b, evaluator_id)
@@ -301,9 +322,14 @@ def compare_cases(
     groups_a, groups_b = _by_case(records_a), _by_case(records_b)
 
     cases: list[CaseDelta] = []
-    for cid in sorted(k for k in groups_a.keys() & groups_b.keys() if k is not None):
-        ids_a, ids_b = groups_a[cid], groups_b[cid]
-        if len(ids_a) == 1 and len(ids_b) == 1:
+    ambiguous: list[AmbiguousCase] = []
+    unmatched_a: list[UnmatchedCase] = []
+    unmatched_b: list[UnmatchedCase] = []
+    for cid in sorted(k for k in groups_a.keys() | groups_b.keys() if k is not None):
+        ids_a, ids_b = groups_a.get(cid, []), groups_b.get(cid, [])
+        if len(ids_a) > 1 or len(ids_b) > 1:
+            ambiguous.append(AmbiguousCase(cid, tuple(ids_a), tuple(ids_b)))
+        elif ids_a and ids_b:
             (rid_a,), (rid_b,) = ids_a, ids_b
             rec_a, rec_b = records_a[rid_a], records_b[rid_b]
             cases.append(CaseDelta(
@@ -314,8 +340,16 @@ def compare_cases(
                 output_changed=rec_a.output != rec_b.output,
                 **_paired_fields(results_a[rid_a], results_b[rid_b]),
             ))
+        elif ids_a:
+            unmatched_a.append(_unmatched(ids_a[0], cid, "no_counterpart", results_a[ids_a[0]]))
+        else:
+            unmatched_b.append(_unmatched(ids_b[0], cid, "no_counterpart", results_b[ids_b[0]]))
+    unmatched_a += [_unmatched(rid, None, "no_input", results_a[rid]) for rid in groups_a.get(None, [])]
+    unmatched_b += [_unmatched(rid, None, "no_input", results_b[rid]) for rid in groups_b.get(None, [])]
 
     paired = tuple(cases)
+    only_a = tuple(sorted(unmatched_a, key=lambda u: u.record_id))
+    only_b = tuple(sorted(unmatched_b, key=lambda u: u.record_id))
     improved, regressed, unchanged = _counts(paired)
     summary = CaseComparisonSummary(
         paired=len(paired),
@@ -324,9 +358,9 @@ def compare_cases(
         unchanged=unchanged,
         contexts_changed=sum(d.contexts_changed for d in paired),
         output_changed=sum(d.output_changed for d in paired),
-        unmatched_a=0,
-        unmatched_b=0,
-        ambiguous=0,
+        unmatched_a=len(only_a),
+        unmatched_b=len(only_b),
+        ambiguous=len(ambiguous),
         mean_score_delta=_mean_score_delta(paired),
         pass_rate_delta=_pass_rate_delta(paired),
     )
@@ -335,8 +369,8 @@ def compare_cases(
         run_b=run_b.run_id,
         evaluator_id=evaluator_id,
         cases=paired,
-        unmatched_a=(),
-        unmatched_b=(),
-        ambiguous=(),
+        unmatched_a=only_a,
+        unmatched_b=only_b,
+        ambiguous=tuple(ambiguous),
         summary=summary,
     )

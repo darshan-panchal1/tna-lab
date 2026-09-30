@@ -244,3 +244,184 @@ def test_comparing_a_run_to_itself_is_all_unchanged(tmp_path: Path) -> None:
     assert all(d.classification == "unchanged" and d.delta == 0.0 for d in result.cases)
     assert not any(d.output_changed or d.contexts_changed or d.status_changed for d in result.cases)
     assert (result.summary.improved, result.summary.regressed, result.summary.unchanged) == (0, 0, 3)
+
+
+# User Story 2 — account for every case that could not be compared.
+#
+# Each scenario builds a pair of runs in a fresh workspace. The accounting-identity test
+# (T015) runs over every one of them, so a new scenario is covered by adding it here.
+
+Runs = tuple[RunRecord, RunRecord]
+
+
+def _story_2(ws: Path) -> Runs:
+    """Spec Story 2: A covers {1, 2, 3}; B covers {2, 3, 4} plus a second case-3 record."""
+    run_a = _scored(ws, "v1", [(_rec(f"case {i}", output="a"), _ok(score=0.5)) for i in (1, 2, 3)])
+    run_b = _scored(ws, "v2", [
+        *[(_rec(f"case {i}", output="b"), _ok(score=0.6)) for i in (2, 3, 4)],
+        (_rec("case 3", output="b, again"), _ok(score=0.7)),
+    ])
+    return run_a, run_b
+
+
+def _no_input(ws: Path) -> Runs:
+    run_a = _scored(ws, "v1", [
+        (DatasetRecord(input=None, output="first"), _ok(score=0.5)),
+        (DatasetRecord(input=None, output="second"), _ok(score=0.5)),
+        (_rec("q", output="a"), _ok(score=0.5)),
+    ])
+    run_b = _scored(ws, "v2", [(_rec("q", output="b"), _ok(score=0.5))])
+    return run_a, run_b
+
+
+def _reference_corrected(ws: Path) -> Runs:
+    run_a = _scored(ws, "v1", [(_rec("q", expected="30 days"), _ok(score=0.5))])
+    run_b = _scored(ws, "v2", [(_rec("q", expected="30 days from delivery"), _ok(score=0.9))])
+    return run_a, run_b
+
+
+def _text_variants(ws: Path) -> Runs:
+    run_a = _scored(ws, "v1", [(_rec("What is X?"), _ok(score=0.5)), (_rec("Where is Y?"), _ok(score=0.5))])
+    run_b = _scored(ws, "v2", [(_rec("What is X? "), _ok(score=0.5)), (_rec("where is y?"), _ok(score=0.5))])
+    return run_a, run_b
+
+
+def _two_sets_in_one_dataset(ws: Path) -> Runs:
+    """quickstart step 7: v2's outputs ingested into v1's dataset, then frozen."""
+    v1 = [(_rec(f"q{i}", output=f"v1 {i}"), _ok(score=0.5)) for i in range(3)]
+    v2 = [(_rec(f"q{i}", output=f"v2 {i}"), _ok(score=0.8)) for i in range(2)]
+    return _scored(ws, "mixed", v1 + v2), _scored(ws, "v2", v2)
+
+
+def _zero_overlap(ws: Path) -> Runs:
+    run_a = _scored(ws, "v1", [(_rec(f"a{i}"), _ok(score=0.5)) for i in range(2)])
+    run_b = _scored(ws, "v2", [(_rec(f"b{i}"), _ok(score=0.5)) for i in range(3)])
+    return run_a, run_b
+
+
+def _all_paired(ws: Path) -> Runs:
+    run_a = _scored(ws, "v1", [(_rec(f"q{i}", output="a"), _ok(score=0.5)) for i in range(3)])
+    run_b = _scored(ws, "v2", [(_rec(f"q{i}", output="b"), _ok(score=0.7)) for i in range(3)])
+    return run_a, run_b
+
+
+SCENARIOS = [
+    _story_2, _no_input, _reference_corrected, _text_variants,
+    _two_sets_in_one_dataset, _zero_overlap, _all_paired,
+]
+
+
+def test_story_2_reports_the_exact_shape(tmp_path: Path) -> None:
+    run_a, run_b = _story_2(tmp_path)
+    result = compare_cases(tmp_path, run_a, run_b, EVAL)
+
+    assert [d.case_id for d in result.cases] == [_cid("case 2")]
+
+    (only_a,) = result.unmatched_a
+    case_1 = _rec("case 1", output="a")
+    assert (only_a.record_id, only_a.case_id, only_a.reason) == (record_id(case_1), _cid("case 1"), "no_counterpart")
+    assert (only_a.status, only_a.score, only_a.fingerprint) == ("ok", 0.5, "fp")
+    assert (only_a.tokens_in, only_a.tokens_out) == (10, 2)
+
+    (only_b,) = result.unmatched_b
+    assert (only_b.record_id, only_b.reason, only_b.score) == (record_id(_rec("case 4", output="b")), "no_counterpart", 0.6)
+
+    (ambiguous,) = result.ambiguous
+    case_3_b = sorted([record_id(_rec("case 3", output="b")), record_id(_rec("case 3", output="b, again"))])
+    assert ambiguous.case_id == _cid("case 3")
+    assert ambiguous.record_ids_a == (record_id(_rec("case 3", output="a")),)
+    assert ambiguous.record_ids_b == tuple(case_3_b)
+    assert _cid("case 3") not in {d.case_id for d in result.cases}  # no delta computed for it
+
+    s = result.summary
+    assert (s.paired, s.unmatched_a, s.unmatched_b, s.ambiguous) == (1, 1, 1, 1)
+
+
+def test_records_without_input_are_unmatched_one_by_one(tmp_path: Path) -> None:
+    run_a, run_b = _no_input(tmp_path)
+    result = compare_cases(tmp_path, run_a, run_b, EVAL)
+
+    no_input = [u for u in result.unmatched_a if u.reason == "no_input"]
+    assert len(no_input) == 2  # two entries, never pooled into one ambiguous case
+    assert all(u.case_id is None for u in no_input)
+    assert result.ambiguous == ()
+    assert len(result.cases) == 1
+
+
+def test_a_corrected_reference_unpairs_the_case_on_both_sides(tmp_path: Path) -> None:
+    run_a, run_b = _reference_corrected(tmp_path)
+    result = compare_cases(tmp_path, run_a, run_b, EVAL)
+
+    assert result.cases == ()
+    assert [u.reason for u in result.unmatched_a] == ["no_counterpart"]
+    assert [u.reason for u in result.unmatched_b] == ["no_counterpart"]
+
+
+def test_whitespace_and_case_variants_are_different_cases(tmp_path: Path) -> None:
+    run_a, run_b = _text_variants(tmp_path)
+    result = compare_cases(tmp_path, run_a, run_b, EVAL)
+
+    assert result.cases == ()
+    assert (len(result.unmatched_a), len(result.unmatched_b)) == (2, 2)
+
+
+def test_two_output_sets_in_one_dataset_are_ambiguous_not_guessed(tmp_path: Path) -> None:
+    run_a, run_b = _two_sets_in_one_dataset(tmp_path)
+    result = compare_cases(tmp_path, run_a, run_b, EVAL)
+
+    assert {a.case_id for a in result.ambiguous} == {_cid("q0"), _cid("q1")}
+    assert all(len(a.record_ids_a) == 2 and len(a.record_ids_b) == 1 for a in result.ambiguous)
+    assert result.cases == ()
+    assert [u.case_id for u in result.unmatched_a] == [_cid("q2")]
+
+
+def test_zero_overlap_is_a_result_with_absent_aggregates(tmp_path: Path) -> None:
+    run_a, run_b = _zero_overlap(tmp_path)
+    result = compare_cases(tmp_path, run_a, run_b, EVAL)
+
+    assert result.cases == ()
+    assert (len(result.unmatched_a), len(result.unmatched_b)) == (2, 3)
+    assert result.summary.mean_score_delta is None
+    assert result.summary.pass_rate_delta is None
+
+
+def test_the_same_two_runs_always_give_the_same_comparison(tmp_path: Path) -> None:
+    run_a, run_b = _story_2(tmp_path)
+    assert compare_cases(tmp_path, run_a, run_b, EVAL) == compare_cases(tmp_path, run_a, run_b, EVAL)
+
+
+def test_swapping_the_runs_swaps_the_sides_and_keeps_case_order(tmp_path: Path) -> None:
+    run_a, run_b = _story_2(tmp_path)
+    forward = compare_cases(tmp_path, run_a, run_b, EVAL)
+    backward = compare_cases(tmp_path, run_b, run_a, EVAL)
+
+    assert (backward.unmatched_a, backward.unmatched_b) == (forward.unmatched_b, forward.unmatched_a)
+    assert [d.case_id for d in backward.cases] == [d.case_id for d in forward.cases]
+    assert [(d.record_id_a, d.record_id_b) for d in backward.cases] == [
+        (d.record_id_b, d.record_id_a) for d in forward.cases
+    ]
+    assert [a.case_id for a in backward.ambiguous] == [a.case_id for a in forward.ambiguous]
+    assert [(a.record_ids_a, a.record_ids_b) for a in backward.ambiguous] == [
+        (a.record_ids_b, a.record_ids_a) for a in forward.ambiguous
+    ]
+
+
+@pytest.mark.parametrize("scenario", SCENARIOS, ids=lambda f: f.__name__.strip("_"))
+def test_every_scored_record_lands_in_exactly_one_place(tmp_path: Path, scenario: Any) -> None:
+    run_a, run_b = scenario(tmp_path)
+    result = compare_cases(tmp_path, run_a, run_b, EVAL)
+
+    placed_a = [d.record_id_a for d in result.cases] + [u.record_id for u in result.unmatched_a]
+    placed_a += [rid for a in result.ambiguous for rid in a.record_ids_a]
+    placed_b = [d.record_id_b for d in result.cases] + [u.record_id for u in result.unmatched_b]
+    placed_b += [rid for a in result.ambiguous for rid in a.record_ids_b]
+
+    for placed, run in ((placed_a, run_a), (placed_b, run_b)):
+        assert len(placed) == len(set(placed)), "a record appears in two places"
+        assert set(placed) == set(run.results[EVAL]), "a scored record is missing"
+
+    s = result.summary
+    ambiguous_a = sum(len(a.record_ids_a) for a in result.ambiguous)
+    ambiguous_b = sum(len(a.record_ids_b) for a in result.ambiguous)
+    assert s.paired + s.unmatched_a + ambiguous_a == len(run_a.results[EVAL])
+    assert s.paired + s.unmatched_b + ambiguous_b == len(run_b.results[EVAL])

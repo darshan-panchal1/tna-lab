@@ -112,6 +112,20 @@ Refusing such pairs would reintroduce R2's RAG failure. Hiding the difference wo
 
 **Decision and why.** The new entry point makes no `evaluate()` call. It reads two completed runs and the record files they scored, so it adds no cost and no score of its own (Article I, Article V). trust-no-agent's evidence cache is keyed by the rendered prompt (`sha256(call_kind ‖ model_identity ‖ prompt_hash)`, spec 001 research R1), and the rendered prompt contains the output and contexts. Two output sets therefore already produce distinct cache entries, and nothing here changes caching. There is no provider parameter, no new environment variable, and no new configuration surface (Article IV). The CLI mirrors the library function exactly (Article II).
 
+## R9 — Locating a run's records: the dataset from `snapshot_ref`, the content verified by its own hash
+
+*Added during planning (plan.md). The spec requires every scored record to resolve to its content (spec FR-010) without saying how, and research R1–R8 did not cover it.*
+
+**Decision.** For each run, take the dataset name from the run record's `snapshot_ref`, using the same `<dataset>@<tag>` split that spec 001's `resolve()` applies. Read each scored record's file from that dataset by `record_id`, then recompute `record_id` over the content read and require it to equal the id the run stored. A missing file, a missing dataset, or a content hash that disagrees is an error naming the run and the record (spec FR-010). It is never downgraded to an unmatched case.
+
+**Why this is sound even though `snapshot_ref` is "for human readability only".** Spec 001's data model says `snapshot_ref` is "never used for comparison equality", and this design keeps that true. The name is used only to *find* a file, never to trust one. Trust comes from the content hash: record files are content-addressed (spec 001 research R1), so content that hashes to the stored `record_id` is, by construction, exactly what the run scored, whichever path led to it. A renamed, copied or hand-edited workspace therefore fails loudly instead of pairing the wrong content.
+
+**Rejected alternatives.**
+
+- *Resolve the snapshot and check `snapshot_id`.* This proves the snapshot matches, but pairing needs record content, not snapshot membership, so it adds a lookup that the per-record hash check already makes redundant.
+- *Search every dataset's records directory for each id.* This works without `snapshot_ref`, but it scans the whole workspace per comparison, and it can find a same-content record in an unrelated dataset. The hash check makes that harmless, but the scan is wasted work when the run already names its dataset.
+- *Persist record content, or case ids, in the run record.* This is rejected by R3: it would change the run record format and freeze R2's key into stored data.
+
 ## Landscape evidence cited by this research
 
 - **The category keys comparison per dataset example, with outputs belonging to the run.** Phoenix's and Langfuse's `run_experiment()` and LangSmith's `evaluate()` each run over a dataset and return "per-example and aggregate scores", and LangSmith's pairwise `evaluate()` takes "two existing experiments" and returns a per-run score mapping (`landscape-2026-09-28.md`, "Datasets decouple from traces"). Spec 001's research already notes that every surveyed tool "assigns an id at ingestion/promotion time, not a content hash", so an example's identity there is independent of any output by construction. That is route A's shape, and it confirms the target semantics R2 adopts: pair by test case, let outputs differ. It does not transfer as mechanism, because each of those tools *executes a task function* to produce the outputs it compares, and tna-lab has no such step (R1). So this research adopts the category's comparison semantics and not its data model.
@@ -122,4 +136,10 @@ Refusing such pairs would reintroduce R2's RAG failure. Hiding the difference wo
 
 Decided here and not reopened by the spec: route (R1), case key (R2), derived identity (R3), report-not-guess pairing (R4), contexts flagged per pair (R5), judge held constant (R6), and workflow (R7).
 
-Genuinely open for spec.md: the entry point's name and exact signature (it takes a workspace, per R3); whether a pass-rate or mean-score delta is computed over all paired cases or only over pairs with `contexts_changed` false; and whether R6's judge-mismatch error warrants an explicit opt-in override.
+The three questions this section originally left open were resolved in spec.md (36916ba):
+
+- The entry point is `compare_cases(workspace, run_a, run_b, evaluator_id) -> CaseComparison`, with sibling types `CaseDelta` and `CaseComparisonSummary`.
+- Aggregates cover every paired case, `contexts_changed` included, with the flag reported per case.
+- R6's judge-mismatch error has no override of any kind.
+
+Planning then surfaced one more question, answered in R9.

@@ -15,7 +15,7 @@ from typing import Any
 import pytest
 
 from tna_lab.cli import main
-from tna_lab.compare import compare
+from tna_lab.compare import compare, compare_cases
 from tna_lab.datasets import ingest, load_jsonl
 from tna_lab.runs import load_run, run
 from tna_lab.snapshots import freeze, resolve
@@ -415,3 +415,154 @@ def test_compare_json_carries_token_counts(
     for record in json.loads(out)["records"]:
         assert (record["tokens_in_a"], record["tokens_out_a"]) == (1200, 340)
         assert (record["tokens_in_b"], record["tokens_out_b"]) == (1200, 340)
+
+
+# Spec 002 T023: `tna-lab compare-cases`.
+
+MATCH_BASIS = "matched by case (input + expected) across snapshots — no same-snapshot guarantee"
+
+V1 = [{"input": f"q{i}", "output": f"v1 answer {i}", "expected": "ref"} for i in (1, 2, 3)]
+V2 = [{"input": f"q{i}", "output": f"v2 answer {i}", "expected": "ref"} for i in (2, 3, 4)]
+
+
+def _case_runs(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path, v1: list[dict[str, str]] = V1,
+    v2: list[dict[str, str]] = V2, **run_b_env: str,
+) -> tuple[str, str]:
+    """Ingest, freeze and run two output sets as separate datasets; return both run ids."""
+    ws = tmp_path / "ws"
+    ids = []
+    for name, rows in (("agent-v1", v1), ("agent-v2", v2)):
+        path = tmp_path / f"{name}.jsonl"
+        path.write_text("".join(json.dumps(r) + "\n" for r in rows))
+        assert _cli(capsys, "ingest", path, "--dataset", name, "--workspace", ws)[0] == 0
+        assert _cli(capsys, "freeze", name, "base", "--workspace", ws)[0] == 0
+    for name in ("agent-v1", "agent-v2"):
+        args = ("run", f"{name}@base", "--evaluator", EVALUATOR, "--workspace", ws)
+        ids.append(_cli(capsys, *args, evaluate_fn=_token_evaluate)[1].strip())
+    return ids[0], ids[1]
+
+
+def test_compare_cases_json_matches_the_library(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run_a, run_b = _case_runs(capsys, tmp_path)
+    ws = tmp_path / "ws"
+    code, out, _ = _cli(
+        capsys, "compare-cases", run_a, run_b, "--evaluator", EVALUATOR, "--workspace", ws, "--json"
+    )
+    expected = compare_cases(ws, load_run(ws, run_a), load_run(ws, run_b), EVALUATOR)
+    assert code == 0
+    assert json.loads(out) == _plain(expected)
+    assert (expected.summary.paired, expected.summary.unmatched_a, expected.summary.unmatched_b) == (2, 1, 1)
+
+
+def test_compare_cases_states_its_matching_basis_first_and_every_section(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run_a, run_b = _case_runs(capsys, tmp_path)
+    ws = tmp_path / "ws"
+    _, out, _ = _cli(capsys, "compare-cases", run_a, run_b, "--evaluator", EVALUATOR, "--workspace", ws)
+    lines = out.splitlines()
+    result = compare_cases(ws, load_run(ws, run_a), load_run(ws, run_b), EVALUATOR)
+
+    assert lines[0] == MATCH_BASIS
+    assert run_a in lines[1] and run_b in lines[1] and "agent-v1@base" in lines[1]
+    assert any("tokens a → b" in line and "ctx" in line and "out" in line for line in lines)
+    for delta in result.cases:
+        (row,) = [line for line in lines if line.startswith(delta.case_id[:12])]
+        assert delta.classification in row and "1200/340 → 1200/340" in row
+    assert "unmatched in a (1):" in lines
+    assert "unmatched in b (1):" in lines
+    assert "ambiguous (0):" in lines
+    (only_a,) = result.unmatched_a
+    assert any(only_a.record_id[:12] in line and "no_counterpart" in line for line in lines)
+    (summary,) = [line for line in lines if line.startswith("summary:")]
+    for name in (
+        "paired=2", "improved=", "regressed=", "unchanged=", "contexts_changed=0", "output_changed=2",
+        "unmatched_a=1", "unmatched_b=1", "ambiguous=0", "mean_score_delta=", "pass_rate_delta=",
+    ):
+        assert name in summary
+
+
+def test_compare_cases_refuses_different_judges(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ws = tmp_path / "ws"
+    run_a, _ = _case_runs(capsys, tmp_path)
+    monkeypatch.setenv("JUDGE_MODEL", "another-judge")
+    run_other = _cli(
+        capsys, "run", "agent-v2@base", "--evaluator", EVALUATOR, "--workspace", ws,
+        evaluate_fn=_token_evaluate,
+    )[1].strip()
+
+    code, out, err = _cli(capsys, "compare-cases", run_a, run_other, "--evaluator", EVALUATOR, "--workspace", ws)
+    assert (code, out) == (1, "")
+    assert err.startswith("tna-lab: error:")
+    assert "test-judge" in err and "another-judge" in err
+
+
+@pytest.mark.parametrize("failure", ["missing_evaluator", "unknown_run", "missing_record"])
+def test_compare_cases_errors_exit_1_with_nothing_on_stdout(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], failure: str
+) -> None:
+    ws = tmp_path / "ws"
+    run_a, run_b = _case_runs(capsys, tmp_path)
+    evaluator = EVALUATOR
+    if failure == "missing_evaluator":
+        evaluator, needle = "tna.not.run", "tna.not.run"
+    elif failure == "unknown_run":
+        run_b, needle = "20260101T000000Z-deadbeef", "20260101T000000Z-deadbeef"
+    else:
+        record = next((ws / "datasets" / "agent-v2" / "records").iterdir())
+        record.unlink()
+        needle = record.stem
+
+    code, out, err = _cli(capsys, "compare-cases", run_a, run_b, "--evaluator", evaluator, "--workspace", ws)
+    assert (code, out) == (1, "")
+    assert err.startswith("tna-lab: error:") and needle in err
+
+
+def test_compare_cases_with_zero_overlap_exits_0(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    only_b = [{"input": "unrelated", "output": "x", "expected": "ref"}]
+    run_a, run_b = _case_runs(capsys, tmp_path, v2=only_b)
+    code, out, _ = _cli(
+        capsys, "compare-cases", run_a, run_b, "--evaluator", EVALUATOR, "--workspace", tmp_path / "ws"
+    )
+    assert code == 0
+    assert "unmatched in a (3):" in out and "unmatched in b (1):" in out
+    assert "mean_score_delta=-" in out
+
+
+def test_compare_cases_uses_cwd_and_reads_no_env_var_for_the_workspace(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("TNA_LAB_WORKSPACE", str(tmp_path / "from-env"))
+    for name, rows in (("agent-v1", V1), ("agent-v2", V2)):
+        path = tmp_path / f"{name}.jsonl"
+        path.write_text("".join(json.dumps(r) + "\n" for r in rows))
+        _cli(capsys, "ingest", path, "--dataset", name)
+        _cli(capsys, "freeze", name, "base")
+    ids = [_cli(capsys, "run", f"{n}@base", "--evaluator", EVALUATOR, evaluate_fn=FakeEvaluate())[1].strip()
+           for n in ("agent-v1", "agent-v2")]
+
+    assert _cli(capsys, "compare-cases", *ids, "--evaluator", EVALUATOR)[0] == 0
+    assert not (tmp_path / "from-env").exists()
+
+
+def _options(subcommand: str, capsys: pytest.CaptureFixture[str]) -> set[str]:
+    with pytest.raises(SystemExit):
+        main([subcommand, "--help"])
+    return {word.rstrip(",") for word in capsys.readouterr().out.split() if word.startswith("--")}
+
+
+def test_compare_gains_no_option_and_still_refuses_different_snapshots(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert _options("compare", capsys) == {"--help", "--workspace", "--json", "--evaluator"}
+    run_a, run_b = _case_runs(capsys, tmp_path)
+    code, _, err = _cli(capsys, "compare", run_a, run_b, "--evaluator", EVALUATOR, "--workspace", tmp_path / "ws")
+    assert code == 1 and "different snapshots" in err

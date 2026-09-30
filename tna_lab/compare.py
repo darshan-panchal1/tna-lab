@@ -278,7 +278,22 @@ def _scored_records(
     `snapshot_ref` names the dataset only to *find* each file; trust comes from
     load_record() recomputing the record's content hash."""
     dataset = run.snapshot_ref.partition("@")[0]
-    return {rid: load_record(workspace, dataset, rid) for rid in results}
+    try:
+        return {rid: load_record(workspace, dataset, rid) for rid in results}
+    except ValueError as exc:  # FR-010: an error naming the run, never an unmatched case
+        raise ValueError(f"run {run.run_id!r} cannot be compared by case: {exc}") from exc
+
+
+def _require_same_judging(run_a: RunRecord, run_b: RunRecord) -> None:
+    """Spec 002 FR-009: a delta across two judges would credit the agent with the judge's
+    variance. No parameter relaxes this; the run records stay readable directly."""
+    for field, label in (("judge_model", "judge model"), ("generator_model", "generator model")):
+        value_a, value_b = getattr(run_a, field), getattr(run_b, field)
+        if value_a != value_b:
+            raise ValueError(
+                f"cannot compare by case across different judging: run {run_a.run_id!r} used "
+                f"{label} {value_a!r}, run {run_b.run_id!r} used {label} {value_b!r}"
+            )
 
 
 def _by_case(records: Mapping[str, DatasetRecord]) -> dict[str | None, list[str]]:
@@ -315,8 +330,11 @@ def compare_cases(
     more than one, never a guess; otherwise its side's unmatched list, as `no_counterpart`,
     or `no_input` when it has no `input` and so no case (FR-003, FR-012-FR-014).
     """
+    # Preconditions, in order, all before any pairing (data-model.md): evaluator, judging,
+    # then every scored record resolving to verified content.
     results_a = _results_for(run_a, evaluator_id)
     results_b = _results_for(run_b, evaluator_id)
+    _require_same_judging(run_a, run_b)
     records_a = _scored_records(workspace, run_a, results_a)
     records_b = _scored_records(workspace, run_b, results_b)
     groups_a, groups_b = _by_case(records_a), _by_case(records_b)

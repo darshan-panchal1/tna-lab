@@ -7,6 +7,8 @@ are plain data, as they are in a stored RunRecord.
 
 from __future__ import annotations
 
+import inspect
+import socket
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -425,3 +427,110 @@ def test_every_scored_record_lands_in_exactly_one_place(tmp_path: Path, scenario
     ambiguous_b = sum(len(a.record_ids_b) for a in result.ambiguous)
     assert s.paired + s.unmatched_a + ambiguous_a == len(run_a.results[EVAL])
     assert s.paired + s.unmatched_b + ambiguous_b == len(run_b.results[EVAL])
+
+
+# User Story 3 — refuse to compare across different judging; read-only; no network.
+
+
+def _record_path(ws: Path, dataset: str, record: DatasetRecord) -> Path:
+    return ws / "datasets" / dataset / "records" / f"{record_id(record)}.json"
+
+
+@pytest.mark.parametrize("missing_in", ["a", "b"])
+def test_a_run_without_the_evaluator_raises_naming_it_and_the_run(tmp_path: Path, missing_in: str) -> None:
+    run_a, run_b = _all_paired(tmp_path)
+    if missing_in == "a":
+        run_a = replace(run_a, run_id="lacks-it", results={"tna.other": run_a.results[EVAL]})
+    else:
+        run_b = replace(run_b, run_id="lacks-it", results={"tna.other": run_b.results[EVAL]})
+    with pytest.raises(ValueError, match=EVAL) as excinfo:
+        compare_cases(tmp_path, run_a, run_b, EVAL)
+    assert "'lacks-it'" in str(excinfo.value)
+
+
+@pytest.mark.parametrize("field", ["judge_model", "generator_model"])
+def test_different_judging_is_refused_naming_both_values(tmp_path: Path, field: str) -> None:
+    run_a, run_b = _all_paired(tmp_path)
+    as_a: dict[str, Any] = {field: "model-a"}
+    as_b: dict[str, Any] = {field: "model-b"}
+    run_a, run_b = replace(run_a, **as_a), replace(run_b, **as_b)
+    with pytest.raises(ValueError, match=field.replace("_", " ")) as excinfo:
+        compare_cases(tmp_path, run_a, run_b, EVAL)
+    assert "model-a" in str(excinfo.value) and "model-b" in str(excinfo.value)
+
+
+def test_there_is_no_parameter_to_relax_any_check() -> None:
+    assert list(inspect.signature(compare_cases).parameters) == ["workspace", "run_a", "run_b", "evaluator_id"]
+
+
+def test_a_missing_evaluator_is_reported_before_a_judge_mismatch(tmp_path: Path) -> None:
+    run_a, run_b = _all_paired(tmp_path)
+    run_b = replace(run_b, judge_model="another-judge", results={})
+    with pytest.raises(ValueError, match=EVAL):
+        compare_cases(tmp_path, run_a, run_b, EVAL)
+
+
+def test_a_judge_mismatch_is_reported_before_an_unresolvable_record(tmp_path: Path) -> None:
+    run_a, run_b = _all_paired(tmp_path)
+    _record_path(tmp_path, "v2", _rec("q0", output="b")).unlink()
+    run_b = replace(run_b, judge_model="another-judge")
+    with pytest.raises(ValueError, match="another-judge"):
+        compare_cases(tmp_path, run_a, run_b, EVAL)
+
+
+def test_a_deleted_record_is_an_error_naming_run_and_record_never_unmatched(tmp_path: Path) -> None:
+    run_a, run_b = _all_paired(tmp_path)
+    gone = _rec("q1", output="b")
+    _record_path(tmp_path, "v2", gone).unlink()
+    with pytest.raises(ValueError, match=record_id(gone)) as excinfo:
+        compare_cases(tmp_path, run_a, run_b, EVAL)
+    assert repr(run_b.run_id) in str(excinfo.value)
+
+
+def test_an_edited_record_is_an_error_naming_run_and_record(tmp_path: Path) -> None:
+    run_a, run_b = _all_paired(tmp_path)
+    edited = _rec("q2", output="a")
+    path = _record_path(tmp_path, "v1", edited)
+    path.write_text(path.read_text().replace('"a"', '"rewritten"'))
+    with pytest.raises(ValueError, match=record_id(edited)) as excinfo:
+        compare_cases(tmp_path, run_a, run_b, EVAL)
+    assert repr(run_a.run_id) in str(excinfo.value)
+
+
+def test_a_run_whose_dataset_is_absent_is_an_error(tmp_path: Path) -> None:
+    run_a, run_b = _all_paired(tmp_path)
+    run_b = replace(run_b, snapshot_ref="copied-from-elsewhere@base")
+    with pytest.raises(ValueError, match="copied-from-elsewhere") as excinfo:
+        compare_cases(tmp_path, run_a, run_b, EVAL)
+    assert repr(run_b.run_id) in str(excinfo.value)
+
+
+def test_comparing_opens_no_socket(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    run_a, run_b = _story_2(tmp_path)
+
+    def refuse(*args: object, **kwargs: object) -> socket.socket:
+        raise AssertionError("compare_cases() tried to open a socket")
+
+    monkeypatch.setattr(socket, "socket", refuse)
+    result = compare_cases(tmp_path, run_a, run_b, EVAL)
+    assert result.summary.paired == 1
+
+
+def _tree(ws: Path) -> dict[str, bytes]:
+    return {str(p.relative_to(ws)): p.read_bytes() if p.is_file() else b"<dir>" for p in ws.rglob("*")}
+
+
+def test_comparing_writes_nothing_to_the_workspace(tmp_path: Path) -> None:
+    run_a, run_b = _story_2(tmp_path)
+    before = _tree(tmp_path)
+    compare_cases(tmp_path, run_a, run_b, EVAL)
+    assert _tree(tmp_path) == before
+
+
+def test_a_failing_comparison_writes_nothing_either(tmp_path: Path) -> None:
+    run_a, run_b = _all_paired(tmp_path)
+    _record_path(tmp_path, "v2", _rec("q0", output="b")).unlink()
+    before = _tree(tmp_path)
+    with pytest.raises(ValueError):
+        compare_cases(tmp_path, run_a, run_b, EVAL)
+    assert _tree(tmp_path) == before

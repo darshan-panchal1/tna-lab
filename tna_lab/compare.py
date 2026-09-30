@@ -38,6 +38,11 @@ class RecordDelta:
     # Article V / FR-027: a comparison surfaces both runs' fingerprints, not only scores.
     fingerprint_a: str | None
     fingerprint_b: str | None
+    # Article V: token counts are shown, not dropped (added in v0.2.0, spec 002 T000).
+    tokens_in_a: int | None
+    tokens_in_b: int | None
+    tokens_out_a: int | None
+    tokens_out_b: int | None
 
 
 @dataclass(frozen=True)
@@ -78,26 +83,35 @@ def _classify(
     return "unchanged"
 
 
-def _record_delta(record_id: str, a: Mapping[str, Any], b: Mapping[str, Any]) -> RecordDelta:
+def _paired_fields(a: Mapping[str, Any], b: Mapping[str, Any]) -> dict[str, Any]:
+    """Every field two paired results share, for RecordDelta and CaseDelta alike: one
+    implementation, so the two comparisons cannot drift in what they classify or show."""
     score_a, score_b = a.get("score"), b.get("score")
     label_a, label_b = a.get("label"), b.get("label")
     delta = score_b - score_a if score_a is not None and score_b is not None else None
     both_labels = label_a is not None and label_b is not None
-    return RecordDelta(
-        record_id=record_id,
-        status_a=a["status"],
-        status_b=b["status"],
-        score_a=score_a,
-        score_b=score_b,
-        label_a=label_a,
-        label_b=label_b,
-        delta=delta,
-        transition=f"{label_a} → {label_b}" if both_labels and label_a != label_b else None,
-        status_changed=a["status"] != b["status"],
-        classification=_classify(a["status"], b["status"], delta, label_a, label_b),
-        fingerprint_a=a.get("judge_fingerprint"),
-        fingerprint_b=b.get("judge_fingerprint"),
-    )
+    return {
+        "status_a": a["status"],
+        "status_b": b["status"],
+        "score_a": score_a,
+        "score_b": score_b,
+        "label_a": label_a,
+        "label_b": label_b,
+        "delta": delta,
+        "transition": f"{label_a} → {label_b}" if both_labels and label_a != label_b else None,
+        "status_changed": a["status"] != b["status"],
+        "classification": _classify(a["status"], b["status"], delta, label_a, label_b),
+        "fingerprint_a": a.get("judge_fingerprint"),
+        "fingerprint_b": b.get("judge_fingerprint"),
+        "tokens_in_a": a.get("tokens_in"),
+        "tokens_in_b": b.get("tokens_in"),
+        "tokens_out_a": a.get("tokens_out"),
+        "tokens_out_b": b.get("tokens_out"),
+    }
+
+
+def _record_delta(record_id: str, a: Mapping[str, Any], b: Mapping[str, Any]) -> RecordDelta:
+    return RecordDelta(record_id=record_id, **_paired_fields(a, b))
 
 
 def _pass_rate_delta(records: tuple[RecordDelta, ...]) -> float | None:

@@ -161,3 +161,38 @@ def test_a_run_without_the_evaluator_raises_naming_it(missing_in: str) -> None:
     with pytest.raises(ValueError, match=SCORE) as excinfo:
         compare(run_a, run_b, SCORE)
     assert repr(missing_in) in str(excinfo.value)
+
+
+# T000 (spec 002): token counts on RecordDelta, closing v0.1.0's Article V gap.
+
+
+def _ok_with_tokens(score: float, tokens_in: int, tokens_out: int, fp: str = "fp-a") -> dict[str, Any]:
+    return {**_ok(score=score, fp=fp), "tokens_in": tokens_in, "tokens_out": tokens_out}
+
+
+def test_record_delta_carries_both_sides_token_counts() -> None:
+    run_a = _run("a", {SCORE: {"r0": _ok_with_tokens(0.5, 1919, 582)}})
+    run_b = _run("b", {SCORE: {"r0": _ok_with_tokens(0.7, 1915, 710)}})
+    (delta,) = compare(run_a, run_b, SCORE).records
+    assert (delta.tokens_in_a, delta.tokens_out_a) == (1919, 582)
+    assert (delta.tokens_in_b, delta.tokens_out_b) == (1915, 710)
+
+
+def test_token_counts_are_none_where_a_result_carries_none() -> None:
+    run_a = _run("a", {SCORE: {"r0": _ok_with_tokens(0.5, 100, 20)}})
+    run_b = _run("b", {SCORE: {"r0": _failed("error")}})  # a non-ok result has no tokens
+    (delta,) = compare(run_a, run_b, SCORE).records
+    assert (delta.tokens_in_a, delta.tokens_out_a) == (100, 20)
+    assert (delta.tokens_in_b, delta.tokens_out_b) == (None, None)
+
+
+def test_token_counts_change_no_classification_delta_or_summary() -> None:
+    plain = compare(_scores("a", [0.5, 0.8]), _scores("b", [0.7, 0.3]), SCORE)
+    with_tokens = compare(
+        _run("a", {SCORE: {"r0": _ok_with_tokens(0.5, 9, 9), "r1": _ok_with_tokens(0.8, 9, 9)}}),
+        _run("b", {SCORE: {"r0": _ok_with_tokens(0.7, 9, 9), "r1": _ok_with_tokens(0.3, 9, 9)}}),
+        SCORE,
+    )
+    assert with_tokens.summary == plain.summary
+    assert [d.classification for d in with_tokens.records] == [d.classification for d in plain.records]
+    assert [d.delta for d in with_tokens.records] == [d.delta for d in plain.records]

@@ -367,3 +367,51 @@ def test_freeze_via_the_library_and_the_cli_agree_on_content(
     cli = resolve(cli_ws, "smoke@v1")
     # snapshot_id and frozen_at are per freeze event by design (research R2).
     assert (cli.dataset, cli.tag, cli.record_ids) == (lib.dataset, lib.tag, lib.record_ids)
+
+
+# T000 (spec 002): `tna-lab compare` shows token counts, closing v0.1.0's Article V gap.
+
+
+@dataclass(frozen=True)
+class FakeTokenResult:
+    evaluator_id: str
+    status: str
+    score: float | None
+    judge_fingerprint: str = "fp-test"
+    tokens_in: int | None = 1200
+    tokens_out: int | None = 340
+
+
+def _token_evaluate(evaluator_id: str, record: Any, judge: Any, cache_dir: Path) -> Any:
+    return FakeTokenResult(evaluator_id, "ok", 0.5)
+
+
+def test_compare_table_shows_both_sides_token_counts(
+    tmp_path: Path, records_file: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _prepared(capsys, tmp_path, records_file)
+    args = ("run", "smoke@v1", "--evaluator", EVALUATOR, "--workspace", tmp_path)
+    run_a = _cli(capsys, *args, evaluate_fn=_token_evaluate)[1].strip()
+    run_b = _cli(capsys, *args, evaluate_fn=FakeEvaluate())[1].strip()  # no token counts
+
+    _, out, _ = _cli(capsys, "compare", run_a, run_b, "--evaluator", EVALUATOR, "--workspace", tmp_path)
+    header, *rows = out.splitlines()
+    assert "tokens a → b" in header
+    record_rows = [r for r in rows if not r.startswith("summary:")]
+    assert record_rows and all("1200/340 → -" in r for r in record_rows)
+
+
+def test_compare_json_carries_token_counts(
+    tmp_path: Path, records_file: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _prepared(capsys, tmp_path, records_file)
+    args = ("run", "smoke@v1", "--evaluator", EVALUATOR, "--workspace", tmp_path)
+    run_a = _cli(capsys, *args, evaluate_fn=_token_evaluate)[1].strip()
+    run_b = _cli(capsys, *args, evaluate_fn=_token_evaluate)[1].strip()
+
+    _, out, _ = _cli(
+        capsys, "compare", run_a, run_b, "--evaluator", EVALUATOR, "--workspace", tmp_path, "--json"
+    )
+    for record in json.loads(out)["records"]:
+        assert (record["tokens_in_a"], record["tokens_out_a"]) == (1200, 340)
+        assert (record["tokens_in_b"], record["tokens_out_b"]) == (1200, 340)

@@ -77,8 +77,14 @@ def _signed(value: float | None) -> str:
     return "-" if value is None else f"{value:+.4f}"
 
 
+def _tokens(tokens_in: int | None, tokens_out: int | None) -> str:
+    if tokens_in is None and tokens_out is None:
+        return "-"
+    return f"{'-' if tokens_in is None else tokens_in}/{'-' if tokens_out is None else tokens_out}"
+
+
 def _comparison_table(result: Comparison) -> str:
-    rows = [("record", "status", "a", "b", "delta", "class", "fingerprint a → b")]
+    rows = [("record", "status", "a", "b", "delta", "class", "fingerprint a → b", "tokens a → b")]
     for d in result.records:
         status = f"{d.status_a} → {d.status_b}" if d.status_changed else d.status_a
         rows.append((
@@ -89,6 +95,7 @@ def _comparison_table(result: Comparison) -> str:
             d.transition or _signed(d.delta),
             d.classification,
             f"{_short(d.fingerprint_a)} → {_short(d.fingerprint_b)}",
+            f"{_tokens(d.tokens_in_a, d.tokens_out_a)} → {_tokens(d.tokens_in_b, d.tokens_out_b)}",
         ))
     widths = [max(len(row[i]) for row in rows) for i in range(len(rows[0]) - 1)]
     lines = ["  ".join(c.ljust(w) for c, w in zip(row, widths, strict=False)) + "  " + row[-1]

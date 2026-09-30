@@ -35,7 +35,7 @@ Expected: green, with `mypy --strict` clean. **Unlike spec 001, there is a basel
 
 **Purpose**: Article V requires that the token counts trust-no-agent's `EvalResult` carries be "aggregated and shown, not dropped". v0.1.0's `RecordDelta` shows each side's judge fingerprint and neither side's token counts. That gap predates this spec. It is closed here, before implementation starts, so that `CaseDelta` (Phase 3) is born with the same cost-visibility fields as `RecordDelta` rather than copying an incomplete struct. One task, tests first, with its own GATE.
 
-- [ ] T000 **Token counts on `RecordDelta`, shown by `tna-lab compare`.**
+- [X] T000 **Token counts on `RecordDelta`, shown by `tna-lab compare`.**
   - *Tests first*, as new functions only in `tests/test_compare.py` and `tests/test_cli.py`:
     - `RecordDelta` carries `tokens_in_a`, `tokens_in_b`, `tokens_out_a` and `tokens_out_b`, echoed from each run's `EvalResult` for that record, and `None` where the result has none (every non-`ok` result from trust-no-agent, and every existing `test_compare.py` fixture);
     - classification, deltas and the summary are unchanged by the new fields;
@@ -52,7 +52,7 @@ Expected: green, with `mypy --strict` clean. **Unlike spec 001, there is a basel
 
 **Purpose**: confirm the baseline before anything changes. There is no scaffolding to create; the package, CI and tooling exist.
 
-- [ ] T001 Confirm `main` is clean and GATE is green at the approved spec commit (or later docs-only commits). Record the passing test count. This is the number that must only grow from here.
+- [X] T001 Confirm `main` is clean and GATE is green at the approved spec commit (or later docs-only commits). Record the passing test count. This is the number that must only grow from here.
 
 **Checkpoint**: baseline recorded.
 
@@ -64,13 +64,13 @@ Expected: green, with `mypy --strict` clean. **Unlike spec 001, there is a basel
 
 ### Tests first
 
-- [ ] T002 [P] Add to `tests/test_records.py` (new functions only) for `records.case_id()`:
+- [X] T002 [P] Add to `tests/test_records.py` (new functions only) for `records.case_id()`:
   - two records with equal `input` and `expected` have equal `case_id`, even when `output`, `contexts` (including `None` versus a tuple) and `metadata` all differ;
   - changing `expected` changes `case_id`, and `expected=None` differs from `expected=""`;
   - `input=None` returns `None`, whatever the other fields;
   - no normalization: `"What is X?"` and `"What is X? "` differ, and so do `"what is x?"` and `"What is X?"` (spec FR-020);
   - a `case_id` is a 64-character lowercase hex string, and never equals the same record's `record_id` (the two hash different payloads).
-- [ ] T003 [P] Add to `tests/test_datasets.py` (new functions only) for `datasets.load_record()`:
+- [X] T003 [P] Add to `tests/test_datasets.py` (new functions only) for `datasets.load_record()`:
   - it returns a `DatasetRecord` equal to the one ingested, `contexts` tuple and `metadata` included;
   - a missing record file raises `ValueError` naming the dataset and the record id;
   - a missing dataset directory raises the same way;
@@ -79,9 +79,9 @@ Expected: green, with `mypy --strict` clean. **Unlike spec 001, there is a basel
 
 ### Implementation
 
-- [ ] T004 [P] Add `case_id(record) -> str | None` to `tna_lab/records.py`, beside `record_id()`, per data-model.md. Its docstring states that it is computed, never stored.
-- [ ] T005 [P] Add `load_record(workspace, dataset, record_id) -> DatasetRecord` to `tna_lab/datasets.py`, per data-model.md and research R9: read-only, rebuilding `contexts` as a tuple, and verifying by recomputing `record_id()`.
-- [ ] T006 GATE. T002 and T003 must now be green, with v0.1.0's tests untouched.
+- [X] T004 [P] Add `case_id(record) -> str | None` to `tna_lab/records.py`, beside `record_id()`, per data-model.md. Its docstring states that it is computed, never stored.
+- [X] T005 [P] Add `load_record(workspace, dataset, record_id) -> DatasetRecord` to `tna_lab/datasets.py`, per data-model.md and research R9: read-only, rebuilding `contexts` as a tuple, and verifying by recomputing `record_id()`.
+- [X] T006 GATE. T002 and T003 must now be green, with v0.1.0's tests untouched.
 
 **Checkpoint**: a case can be identified and a scored record can be resolved and trusted.
 
@@ -93,7 +93,7 @@ Expected: green, with `mypy --strict` clean. **Unlike spec 001, there is a basel
 
 ### Tests first
 
-- [ ] T007 [US1] Create `tests/test_compare_cases.py`, with fixtures that ingest and freeze two datasets (`agent-v1`, `agent-v2`) in `tmp_path` and produce run records with the same judge, either via `run()` with a fake `evaluate_fn` whose score depends on `record.output`, or directly as `RunRecord`s over the ingested ids. Cover:
+- [X] T007 [US1] Create `tests/test_compare_cases.py`, with fixtures that ingest and freeze two datasets (`agent-v1`, `agent-v2`) in `tmp_path` and produce run records with the same judge, either via `run()` with a fake `evaluate_fn` whose score depends on `record.output`, or directly as `RunRecord`s over the ingested ids. Cover:
   - three cases with equal `input`/`expected` in both datasets pair across the two snapshots: three `CaseDelta`s, each carrying both record ids, and the runs share no `snapshot_id` (spec FR-007);
   - scores `[0.5, 0.8, 0.5]` against `[0.7, 0.8, 0.3]` classify `improved`/`unchanged`/`regressed`, with deltas `+0.2`/`0.0`/`-0.2` (`pytest.approx`) and summary counts 1/1/1;
   - **classification parity** (spec FR-016): for several result pairs (score up, score down, equal, `ok → invalid_output`, `invalid_output → ok`, `error → skipped`, `fail → pass` labels, unordered labels), the `CaseDelta.classification` equals the `RecordDelta.classification` that `compare()` produces for the same two results;
@@ -107,10 +107,10 @@ Expected: green, with `mypy --strict` clean. **Unlike spec 001, there is a basel
 
 ### Implementation
 
-- [ ] T008 [US1] Add the frozen dataclasses `CaseDelta`, `UnmatchedCase`, `AmbiguousCase`, `CaseComparisonSummary` and `CaseComparison` to `tna_lab/compare.py`, exactly per data-model.md, including the lists that stay empty until Phase 4. `CaseDelta` gets its shared fields, token counts included, from T000's builder, not from a second copy.
-- [ ] T009 [US1] Generalize `compare.py`'s `_pass_rate_delta()` to take `(label_a, label_b)` pairs, so both comparisons share it, and keep `_classify()` shared as-is. `compare()`'s results must not move: `tests/test_compare.py` passes **unmodified**. This is the refactor's only guard, so run it before and after.
-- [ ] T010 [US1] Implement `compare_cases(workspace, run_a, run_b, evaluator_id)` for the pairing path: resolve both runs' scored records via `load_record()` (the dataset is `snapshot_ref.partition("@")[0]`, research R9), group by `case_id()`, build a `CaseDelta` per case with exactly one record per side, and compute the summary with the shared helpers, ordering `cases` by `case_id`.
-- [ ] T011 GATE. T007 must now be green, and `tests/test_compare.py` unmodified.
+- [X] T008 [US1] Add the frozen dataclasses `CaseDelta`, `UnmatchedCase`, `AmbiguousCase`, `CaseComparisonSummary` and `CaseComparison` to `tna_lab/compare.py`, exactly per data-model.md, including the lists that stay empty until Phase 4. `CaseDelta` gets its shared fields, token counts included, from T000's builder, not from a second copy.
+- [X] T009 [US1] Generalize `compare.py`'s `_pass_rate_delta()` to take `(label_a, label_b)` pairs, so both comparisons share it, and keep `_classify()` shared as-is. `compare()`'s results must not move: `tests/test_compare.py` passes **unmodified**. This is the refactor's only guard, so run it before and after.
+- [X] T010 [US1] Implement `compare_cases(workspace, run_a, run_b, evaluator_id)` for the pairing path: resolve both runs' scored records via `load_record()` (the dataset is `snapshot_ref.partition("@")[0]`, research R9), group by `case_id()`, build a `CaseDelta` per case with exactly one record per side, and compute the summary with the shared helpers, ordering `cases` by `case_id`.
+- [X] T011 GATE. T007 must now be green, and `tests/test_compare.py` unmodified.
 
 **Checkpoint**: two agent versions' outputs can be compared case by case. Anything unpaired is not yet reported, which Phase 4 closes before this feature is usable.
 
@@ -122,25 +122,25 @@ Expected: green, with `mypy --strict` clean. **Unlike spec 001, there is a basel
 
 ### Tests first
 
-- [ ] T012 [US2] Add to `tests/test_compare_cases.py` the spec's Story 2 scenario: run A covers cases {1, 2, 3}, and run B covers {2, 3, 4} plus a second record for case 3 with a different output. Assert the exact shape:
+- [X] T012 [US2] Add to `tests/test_compare_cases.py` the spec's Story 2 scenario: run A covers cases {1, 2, 3}, and run B covers {2, 3, 4} plus a second record for case 3 with a different output. Assert the exact shape:
   - case 2 is the only `CaseDelta`;
   - `unmatched_a` is exactly case 1, with its `record_id`, `case_id`, `reason="no_counterpart"`, and its own status, score, fingerprint and token counts;
   - `unmatched_b` is exactly case 4, likewise;
   - `ambiguous` is exactly one entry for case 3, with one id in `record_ids_a` and both ids in `record_ids_b`, sorted, and no delta computed anywhere for case 3;
   - the summary counts are `paired=1, unmatched_a=1, unmatched_b=1, ambiguous=1`.
-- [ ] T013 [P] [US2] Add to `tests/test_compare_cases.py`:
+- [X] T013 [P] [US2] Add to `tests/test_compare_cases.py`:
   - a record with `input=None` lands in its side's unmatched list with `reason="no_input"` and `case_id=None`, and two such records on one side are two unmatched entries, never one ambiguous case (spec FR-003);
   - a case whose `expected` was corrected between the datasets is unmatched on *both* sides, `no_counterpart` each, with no delta;
   - whitespace-only and letter-case-only differences in `input` are unmatched on both sides (spec FR-020);
   - **two output sets in one dataset** (quickstart step 7): ingesting v2's file into v1's dataset and freezing it makes each shared case ambiguous;
   - **zero overlap**: two runs with no case in common return successfully, with `cases == ()`, every record in an unmatched list, and `mean_score_delta` and `pass_rate_delta` both `None`, not `0.0` (spec FR-023).
-- [ ] T014 [P] [US2] Add a determinism test: the same two runs always yield an equal `CaseComparison`, and swapping `run_a`/`run_b` swaps the `_a`/`_b` fields (unmatched lists, record ids, `record_ids_a`/`_b`) while `cases` and `ambiguous` keep the same case ordering.
-- [ ] T015 [US2] Add an **accounting-identity** test, parametrized over every run-pair fixture in `tests/test_compare_cases.py`: on each side, `paired + len(unmatched_side) + (record ids that side contributes to ambiguous)` equals the number of records that run scored for the evaluator, and no record id appears in two places (spec FR-011, SC-002).
+- [X] T014 [P] [US2] Add a determinism test: the same two runs always yield an equal `CaseComparison`, and swapping `run_a`/`run_b` swaps the `_a`/`_b` fields (unmatched lists, record ids, `record_ids_a`/`_b`) while `cases` and `ambiguous` keep the same case ordering.
+- [X] T015 [US2] Add an **accounting-identity** test, parametrized over every run-pair fixture in `tests/test_compare_cases.py`: on each side, `paired + len(unmatched_side) + (record ids that side contributes to ambiguous)` equals the number of records that run scored for the evaluator, and no record id appears in two places (spec FR-011, SC-002).
 
 ### Implementation
 
-- [ ] T016 [US2] Complete `compare_cases()`: an `AmbiguousCase` per case id carried by more than one record on either side; an `UnmatchedCase` (`no_counterpart` or `no_input`) for every other unpaired record, carrying its own result; the ordering per data-model.md; and the summary counts. A comparison with zero pairs returns normally.
-- [ ] T017 GATE. T012–T015 must now be green.
+- [X] T016 [US2] Complete `compare_cases()`: an `AmbiguousCase` per case id carried by more than one record on either side; an `UnmatchedCase` (`no_counterpart` or `no_input`) for every other unpaired record, carrying its own result; the ordering per data-model.md; and the summary counts. A comparison with zero pairs returns normally.
+- [X] T017 GATE. T012–T015 must now be green.
 
 **Checkpoint**: the comparison's weaker matching guarantee is fully accounted for. Nothing it could not pair is silent.
 
@@ -152,7 +152,7 @@ Expected: green, with `mypy --strict` clean. **Unlike spec 001, there is a basel
 
 ### Tests first
 
-- [ ] T018 [US3] Add to `tests/test_compare_cases.py`:
+- [X] T018 [US3] Add to `tests/test_compare_cases.py`:
   - a run lacking results for `evaluator_id`, on either side, raises `ValueError` naming the evaluator id and that run (spec FR-008);
   - differing `judge_model` raises `ValueError` naming both models; differing `generator_model` does the same for both generator models (spec FR-009);
   - **no escape hatch**: `inspect.signature(compare_cases)` has exactly the parameters `workspace, run_a, run_b, evaluator_id`;
@@ -160,13 +160,13 @@ Expected: green, with `mypy --strict` clean. **Unlike spec 001, there is a basel
   - a scored record whose file was deleted raises `ValueError` naming the run and the record. It is **not** reported as unmatched (spec FR-010);
   - a scored record whose file was edited so its hash no longer matches raises the same way (research R9);
   - a run whose dataset directory is absent (a run file copied from another workspace) raises the same way.
-- [ ] T019 [P] [US3] **No network** (Article III; spec FR-024): with `socket.socket` monkeypatched to raise on construction, `compare_cases()` over the Story 1 fixtures completes normally. This is the narrow Article III socket guard plan.md commits to: this feature's tests only, not the whole suite.
-- [ ] T020 [P] [US3] **Read-only** (rule 2): snapshot every path, with its size and bytes, under the workspace before `compare_cases()`, and assert that the tree is identical afterwards, both for a successful comparison and for one that raises.
+- [X] T019 [P] [US3] **No network** (Article III; spec FR-024): with `socket.socket` monkeypatched to raise on construction, `compare_cases()` over the Story 1 fixtures completes normally. This is the narrow Article III socket guard plan.md commits to: this feature's tests only, not the whole suite.
+- [X] T020 [P] [US3] **Read-only** (rule 2): snapshot every path, with its size and bytes, under the workspace before `compare_cases()`, and assert that the tree is identical afterwards, both for a successful comparison and for one that raises.
 
 ### Implementation
 
-- [ ] T021 [US3] Add the preconditions to `compare_cases()` in the documented order (evaluator, then judge and generator, then resolution), all before pairing, with error messages naming what data-model.md says they name.
-- [ ] T022 GATE. T018–T020 must now be green.
+- [X] T021 [US3] Add the preconditions to `compare_cases()` in the documented order (evaluator, then judge and generator, then resolution), all before pairing, with error messages naming what data-model.md says they name.
+- [X] T022 GATE. T018–T020 must now be green.
 
 **Checkpoint**: the library feature is complete. A comparison either attributes a delta to the outputs under one fixed judge, or refuses.
 
@@ -178,7 +178,7 @@ Expected: green, with `mypy --strict` clean. **Unlike spec 001, there is a basel
 
 ### Tests first
 
-- [ ] T023 Add to `tests/test_cli.py` (new functions only), invoking `tna_lab.cli.main` with `argv` against a `tmp_path` workspace:
+- [X] T023 Add to `tests/test_cli.py` (new functions only), invoking `tna_lab.cli.main` with `argv` against a `tmp_path` workspace:
   - `compare-cases <a> <b> --evaluator <id> --json` prints JSON equal to `asdict(compare_cases(...))` for the same runs, unmatched and ambiguous lists included (spec FR-025);
   - the human output's **first line** is the matching-basis line from plan.md (spec FR-026), the case table has the same `tokens a → b` column T000 gives `compare`'s table, and the output contains the `unmatched in a (n):`, `unmatched in b (n):` and `ambiguous (n):` sections, each present with `(0)` when empty, plus a `summary:` line carrying every `CaseComparisonSummary` count;
   - error paths exit with status 1 and print `tna-lab: error: …` to stderr, with nothing on stdout: judge mismatch naming both models, missing evaluator, unknown run id, and an unresolvable record;
@@ -188,8 +188,8 @@ Expected: green, with `mypy --strict` clean. **Unlike spec 001, there is a basel
 
 ### Implementation
 
-- [ ] T024 Add the `compare-cases` subcommand to `tna_lab/cli.py`: `load_run` ×2, then `compare_cases`, then the human format from plan.md or `--json`. There is no logic beyond parsing and formatting, and the `compare` subparser gets no edits.
-- [ ] T025 GATE. T023 must now be green.
+- [X] T024 Add the `compare-cases` subcommand to `tna_lab/cli.py`: `load_run` ×2, then `compare_cases`, then the human format from plan.md or `--json`. There is no logic beyond parsing and formatting, and the `compare` subparser gets no edits.
+- [X] T025 GATE. T023 must now be green.
 
 **Checkpoint**: the feature is reachable from the terminal, and the two comparison commands cannot be confused.
 
@@ -197,10 +197,10 @@ Expected: green, with `mypy --strict` clean. **Unlike spec 001, there is a basel
 
 ## Phase 7: Exports, docs, version
 
-- [ ] T026 [P] Export `compare_cases`, `CaseComparison`, `CaseDelta`, `CaseComparisonSummary`, `UnmatchedCase` and `AmbiguousCase` from `tna_lab/__init__.py`, keeping `__all__` sorted as it is today. Add an import test in `tests/test_compare_cases.py`.
-- [ ] T027 [P] Update `README.md`: add `compare-cases` to the commands table, and add a short "Compare outputs by case" section, condensed from quickstart.md steps 1–4, with a one-line contrast between `compare` and `compare-cases`. Update the existing sample `compare` table to show T000's tokens column. Replace the "What v0.1.0 deliberately does not do" section, whose first paragraph becomes false with this feature, with what v0.2.0 does not do: trace/OTel ingestion, a hosted view, cross-judge comparison, fuzzy case matching. Keep every link an absolute GitHub URL, since this README is also the PyPI long description.
-- [ ] T028 Bump the version to `0.2.0` in `pyproject.toml` and `tna_lab/__init__.py`, and run `uv lock` so `uv.lock`'s entry for the project matches. CI's `uv sync --frozen` would not catch a stale entry, but the next `uv lock --check` would. **Tagging and publishing are not part of this task list**: as for v0.1.0, the `v0.2.0` tag is a separate decision, and it publishes to PyPI with no approval step.
-- [ ] T029 Final GATE, plus `uv build` and `twine check` on both artifacts, as was done for v0.1.0.
+- [X] T026 [P] Export `compare_cases`, `CaseComparison`, `CaseDelta`, `CaseComparisonSummary`, `UnmatchedCase` and `AmbiguousCase` from `tna_lab/__init__.py`, keeping `__all__` sorted as it is today. Add an import test in `tests/test_compare_cases.py`.
+- [X] T027 [P] Update `README.md`: add `compare-cases` to the commands table, and add a short "Compare outputs by case" section, condensed from quickstart.md steps 1–4, with a one-line contrast between `compare` and `compare-cases`. Update the existing sample `compare` table to show T000's tokens column. Replace the "What v0.1.0 deliberately does not do" section, whose first paragraph becomes false with this feature, with what v0.2.0 does not do: trace/OTel ingestion, a hosted view, cross-judge comparison, fuzzy case matching. Keep every link an absolute GitHub URL, since this README is also the PyPI long description.
+- [X] T028 Bump the version to `0.2.0` in `pyproject.toml` and `tna_lab/__init__.py`, and run `uv lock` so `uv.lock`'s entry for the project matches. CI's `uv sync --frozen` would not catch a stale entry, but the next `uv lock --check` would. **Tagging and publishing are not part of this task list**: as for v0.1.0, the `v0.2.0` tag is a separate decision, and it publishes to PyPI with no approval step.
+- [X] T029 Final GATE, plus `uv build` and `twine check` on both artifacts, as was done for v0.1.0.
 
 ---
 

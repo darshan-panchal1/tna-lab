@@ -33,3 +33,18 @@ def record_id(record: DatasetRecord) -> str:
         "metadata": dict(record.metadata),
     }
     return hashlib.sha256(canonical_json(payload).encode("utf-8")).hexdigest()
+
+
+def case_id(record: DatasetRecord) -> str | None:
+    """The record's *case*: a full sha256 hex digest over `input` and `expected` only
+    (spec 002 FR-001, research R2). Computed, never stored: it exists only inside a
+    comparison, and no field, file or run record holds one (spec 002 FR-002).
+
+    `output`, `contexts` and `metadata` are excluded. In trust-no-agent's own model, output
+    and contexts are what the agent produced, and metadata never reaches a judge. Values are
+    compared exactly, with no normalization. A record with no `input` has no case: `None`.
+    """
+    if record.input is None:
+        return None
+    payload = {"input": record.input, "expected": record.expected}
+    return hashlib.sha256(canonical_json(payload).encode("utf-8")).hexdigest()

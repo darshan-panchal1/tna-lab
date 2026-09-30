@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from tna_lab.datasets import ingest, load_jsonl
+from tna_lab.datasets import ingest, load_jsonl, load_record
 from tna_lab.records import DatasetRecord, record_id
 from tna_lab.storage import read_json
 
@@ -77,3 +77,44 @@ def test_load_jsonl_rejects_a_line_that_is_not_an_object(tmp_path: Path) -> None
     path.write_text('["q", "a"]\n')
     with pytest.raises(ValueError, match=r"records\.jsonl:1"):
         load_jsonl(path)
+
+
+# T003 (spec 002): load_record - read-only, content-hash verified (research R9).
+
+
+def test_load_record_returns_the_record_as_ingested(tmp_path: Path) -> None:
+    record = DatasetRecord(input="q", output="a", contexts=("c1", "c2"), metadata={"k": "v"})
+    ingest(tmp_path, "smoke", [record])
+    assert load_record(tmp_path, "smoke", record_id(record)) == record
+
+
+def test_load_record_of_a_missing_record_raises_naming_dataset_and_id(tmp_path: Path) -> None:
+    ingest(tmp_path, "smoke", _records(1))
+    with pytest.raises(ValueError, match="smoke") as excinfo:
+        load_record(tmp_path, "smoke", "f" * 64)
+    assert "f" * 64 in str(excinfo.value)
+
+
+def test_load_record_from_a_missing_dataset_raises_naming_it(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="nowhere") as excinfo:
+        load_record(tmp_path, "nowhere", "f" * 64)
+    assert "f" * 64 in str(excinfo.value)
+
+
+def test_load_record_rejects_content_that_no_longer_hashes_to_its_id(tmp_path: Path) -> None:
+    record = DatasetRecord(input="q", output="a")
+    ingest(tmp_path, "smoke", [record])
+    rid = record_id(record)
+    path = tmp_path / "datasets" / "smoke" / "records" / f"{rid}.json"
+    path.write_text(path.read_text().replace('"a"', '"edited"'))
+    with pytest.raises(ValueError, match=rid):
+        load_record(tmp_path, "smoke", rid)
+
+
+def test_load_record_creates_nothing(tmp_path: Path) -> None:
+    ingest(tmp_path, "smoke", _records(1))
+    before = sorted(p.relative_to(tmp_path) for p in tmp_path.rglob("*"))
+    with pytest.raises(ValueError):
+        load_record(tmp_path, "absent", "f" * 64)
+    load_record(tmp_path, "smoke", record_id(_records(1)[0]))
+    assert sorted(p.relative_to(tmp_path) for p in tmp_path.rglob("*")) == before

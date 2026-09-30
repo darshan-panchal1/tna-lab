@@ -82,3 +82,30 @@ def load_jsonl(path: Path) -> list[DatasetRecord]:
             )
         )
     return records
+
+
+def load_record(workspace: Path, dataset: str, rid: str) -> DatasetRecord:
+    """Read one record back and prove it is the record `rid` names (spec 002 research R9).
+
+    Read-only. Raises ValueError naming the dataset and the record if the file is absent,
+    or if its content no longer hashes to `rid`: record files are content-addressed, so a
+    mismatch means the workspace was edited or assembled from elsewhere.
+    """
+    path = dataset_dir(workspace, dataset) / "records" / f"{rid}.json"
+    if not path.exists():
+        raise ValueError(f"record {rid!r} does not exist in dataset {dataset!r}")
+    data = read_json(path)
+    contexts = data["contexts"]
+    record = DatasetRecord(
+        input=data["input"],
+        output=data["output"],
+        expected=data["expected"],
+        contexts=tuple(contexts) if contexts is not None else None,
+        metadata=data["metadata"],
+    )
+    if record_id(record) != rid:
+        raise ValueError(
+            f"record {rid!r} in dataset {dataset!r} no longer matches its content hash; "
+            "the workspace was modified after ingestion"
+        )
+    return record
